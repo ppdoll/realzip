@@ -4,6 +4,7 @@ import { REGION_BY_CODE, regionLabel } from '@/data/regions';
 import { FETCH_CONCURRENCY, RENT_WINDOW_MONTHS, WINDOW_MONTHS } from '@/lib/config';
 import { areaOptions } from '@/lib/estimate';
 import { recentMonths } from '@/lib/months';
+import { position, regionJeonseRatios, valuesOf } from '@/lib/region-metrics';
 import { filterComplexRents, summarizeRent } from '@/lib/rent';
 import { filterComplex, getRegionTrades } from '@/lib/store';
 import { getRegionRents } from '@/lib/store-rent';
@@ -103,8 +104,24 @@ export async function GET(req: Request) {
       salePrice: parsed.data.salePrice ?? null,
     });
 
+    // 전세가율 20.6% 가 낮은 건지 감이 안 온다 — 같은 구 분포 안에서의 위치를 붙인다.
+    // 분포는 단지별 (중위 전세보증금 / 중위 매매가) 라 회귀 추정과 방식이 다르다.
+    // 그래서 위치를 매길 때도 이 화면 값이 아니라 **같은 방식으로 계산한 이 단지 값**을 쓴다.
+    let jeonseRatio = null;
+    try {
+      const dist = await regionJeonseRatios(lawdCd);
+      jeonseRatio = position(
+        dist.byComplex.get(aptSeq) ?? null,
+        dist.distribution,
+        valuesOf(dist.byComplex),
+      );
+    } catch {
+      // 분포는 부가 정보다 — 못 구해도 전월세 요약은 보여준다
+    }
+
     return NextResponse.json({
       region: { code: lawdCd, label: regionLabel(lawdCd) },
+      jeonseRatio,
       complex: { aptSeq, aptNm: head.aptNm, umdNm: head.umdNm, jibun: head.jibun },
       window: { from, to, months: rentMonths.length },
       selectedArea: targetArea,

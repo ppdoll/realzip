@@ -9,6 +9,7 @@ import React from 'react';
 import PriceChart from '@/components/PriceChart';
 import IndexChart from '@/components/IndexChart';
 import EstimateCard from '@/components/EstimateCard';
+import DistBar from '@/components/DistBar';
 import { buildRegionIndex, estimate } from '@/lib/estimate';
 import { recentMonths } from '@/lib/months';
 import { PYEONG } from '@/lib/stats';
@@ -82,6 +83,52 @@ const card = renderToStaticMarkup(React.createElement(EstimateCard, { estimate: 
 checks.push(['EstimateCard 히어로 숫자', /hero-figure/.test(card) && /억/.test(card), 'ok']);
 checks.push(['EstimateCard 타일 6개', (card.match(/class="tile"/g) ?? []).length === 6, `${(card.match(/class="tile"/g) ?? []).length}개`]);
 checks.push(['EstimateCard NaN 없음', !/(NaN|Infinity|undefined)/.test(card), 'ok']);
+
+// ── DistBar: 표시가 띠 밖으로 나가지 않는지 (0~100% 안) ──
+// 값이 분포 밖으로 크게 벗어나는 경우가 실제로 흔하다 (은마 회전율은 p25 보다 낮다).
+// 그래서 축 범위 계산이 이 단지 값까지 담는지 양쪽 극단으로 확인한다.
+const DIST = { count: 196, median: 2, p25: 1.1, p75: 3.5 };
+const DIST_CASES: [string, number][] = [
+  ['분포 아래', 0.1],
+  ['p25 바로 아래', 1.0],
+  ['중위', 2],
+  ['분포 위', 12.4],
+  ['0', 0],
+];
+for (const [name, value] of DIST_CASES) {
+  const html = renderToStaticMarkup(
+    React.createElement(DistBar, {
+      pos: { value, distribution: DIST, percentile: 16, vsMedian: 0.5 },
+      regionLabel: '강남구',
+    }),
+  );
+  const lefts = [...html.matchAll(/left:\s*([\d.]+)%/g)].map((m) => Number(m[1]));
+  const widths = [...html.matchAll(/width:\s*([\d.]+)%/g)].map((m) => Number(m[1]));
+  const inBounds =
+    lefts.length === 3 && lefts.every((v) => v >= 0 && v <= 100) && widths.every((w) => w > 0);
+  checks.push([
+    `DistBar 표시가 띠 안에 (${name} ${value}%)`,
+    inBounds && !/(NaN|Infinity|undefined)/.test(html),
+    lefts.map((v) => v.toFixed(1)).join(' / '),
+  ]);
+}
+// 범례는 색 말고 모양도 쓰므로 세 표시가 모두 있어야 한다
+const distHtml = renderToStaticMarkup(
+  React.createElement(DistBar, {
+    pos: { value: 0.9, distribution: DIST, percentile: 16, vsMedian: 0.5 },
+    regionLabel: '강남구',
+  }),
+);
+checks.push([
+  'DistBar 범례 3종 (점·선·띠)',
+  /k-dot/.test(distHtml) && /k-median/.test(distHtml) && /k-band/.test(distHtml),
+  'ok',
+]);
+checks.push([
+  'DistBar 자릿수 고정 (2 가 아니라 2.0)',
+  /2\.0%/.test(distHtml) && !/>2%/.test(distHtml),
+  'ok',
+]);
 
 let failed = 0;
 for (const [name, ok, detail] of checks) {

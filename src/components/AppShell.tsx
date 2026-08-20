@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Region } from '@/data/regions';
+import { REGION_BY_CODE, type Region } from '@/data/regions';
 import type { Complex, Estimate, IndexPoint, Trade } from '@/lib/types';
 import { krwShort, pyeong } from '@/lib/format';
 import EstimateCard from './EstimateCard';
@@ -520,13 +520,19 @@ export default function AppShell({ sidoList }: { sidoList: { sido: string; regio
                 </div>
               )}
 
-              <FactsCard data={facts} loading={factsLoading} error={factsError} />
+              <FactsCard
+                data={facts}
+                loading={factsLoading}
+                error={factsError}
+                regionLabel={REGION_BY_CODE.get(detail.region.code)?.name}
+              />
 
               <RentCard
                 data={rent}
                 loading={rentLoading}
                 error={rentError}
                 salePrice={detail.estimate?.price ?? null}
+                regionLabel={REGION_BY_CODE.get(detail.region.code)?.name}
               />
 
               <SimilarCard

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { REGION_BY_CODE, regionLabel } from '@/data/regions';
 import { recentMonths } from '@/lib/months';
+import { regionJeonseRatios, regionTurnover } from '@/lib/region-metrics';
 import { SEOUL_CODES, regionStatsFor, type RegionStat } from '@/lib/region-stats';
 import {
   AREA_TOLERANCE,
@@ -111,7 +112,34 @@ export async function GET(req: Request) {
 
     // 추천에 실제로 등장한 지역만 계산한다 (서울 25개 구를 다 하면 36개월 198,000행)
     const needed = [...new Set(items.map((i) => i.lawdCd))];
-    const stats = await regionStatsFor(needed);
+
+    // 가격·면적만 맞춰 놓으면 "왜 이 단지가 더 싼지" 를 알 수 없다.
+    // 회전율(손바뀜)과 전세가율(실수요 대비 가격)을 같이 붙여서 그 차이를 보이게 한다.
+    // 두 값 모두 구 단위 계산이라 30분 캐시가 걸려 있고, 실패해도 추천 자체는 살린다.
+    const [stats, metrics] = await Promise.all([
+      regionStatsFor(needed),
+      Promise.all(
+        needed.map(async (code) => {
+          try {
+            const [t, j] = await Promise.all([regionTurnover(code), regionJeonseRatios(code)]);
+            return [code, { turnover: t.byComplex, jeonse: j.byComplex }] as const;
+          } catch {
+            return [code, null] as const;
+          }
+        }),
+      ),
+    ]);
+    const metricByRegion = new Map(metrics);
+
+    const enriched = items.map((i) => {
+      const m = metricByRegion.get(i.lawdCd);
+      return {
+        ...i,
+        turnoverPct: m?.turnover.get(i.aptSeq) ?? null,
+        jeonseRatioPct: m?.jeonse.get(i.aptSeq) ?? null,
+      };
+    });
+
     const regions: Record<string, RegionStat> = {};
     for (const code of needed) {
       const s = stats.get(code);
@@ -132,7 +160,7 @@ export async function GET(req: Request) {
         pricePct: Math.round(PRICE_TOLERANCE * 1000) / 10,
       },
       candidateTrades: rows.length,
-      items,
+      items: enriched,
       regions,
     });
   } catch (e) {

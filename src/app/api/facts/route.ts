@@ -5,6 +5,7 @@ import { WINDOW_MONTHS } from '@/lib/config';
 import { buildComplexFacts, turnoverLabel } from '@/lib/complex-facts';
 import { recentMonths } from '@/lib/months';
 import { filterComplex, getRegionTrades, storeMode } from '@/lib/store';
+import { position, regionTurnover, valuesOf } from '@/lib/region-metrics';
 import { findKapt } from '@/lib/store-kapt';
 import { serverClient } from '@/lib/supabase';
 
@@ -93,11 +94,22 @@ export async function GET(req: Request) {
       rentCount12m: rentCount.count ?? 0,
     });
 
+    // 회전율 0.9% 는 그 자체로 감이 오지 않는다 — 같은 구 분포 안에서의 위치를 붙인다.
+    // 분포는 나와 똑같이 (거래건수 / K-apt 세대수) 로 계산한 값들이라 비교가 성립한다.
+    let turnover = null;
+    try {
+      const region = await regionTurnover(lawdCd);
+      turnover = position(facts.turnoverPct, region.distribution, valuesOf(region.byComplex));
+    } catch {
+      // 분포는 부가 정보다 — 못 구해도 단지 정보 자체는 보여준다
+    }
+
     return NextResponse.json({
       matched: true,
       window: { from: from12, months: 12 },
       facts,
       turnoverLabel: turnoverLabel(facts.turnoverPct),
+      turnover,
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);

@@ -1,7 +1,7 @@
 'use client';
 
 import type { ComplexFacts } from '@/lib/complex-facts';
-import { pyeong } from '@/lib/format';
+import DistBar, { type Positioned } from './DistBar';
 
 export type FactsResponse =
   | {
@@ -9,6 +9,8 @@ export type FactsResponse =
       window: { from: string; months: number };
       facts: ComplexFacts;
       turnoverLabel: string | null;
+      /** 같은 구 분포 안에서의 위치 — 없으면 비교 줄을 접는다 */
+      turnover: Positioned | null;
     }
   | { matched: false; reason: string; complex?: { aptNm: string } };
 
@@ -16,6 +18,8 @@ type Props = {
   data: FactsResponse | null;
   loading: boolean;
   error: string | null;
+  /** 비교 대상 지역 이름 (예: 강남구) */
+  regionLabel?: string;
 };
 
 /** 값이 없으면 아예 줄을 지운다 — "—" 만 늘어놓으면 읽기 나쁘다 */
@@ -29,7 +33,7 @@ function Spec({ label, value }: { label: string; value: string | number | null |
   );
 }
 
-export default function FactsCard({ data, loading, error }: Props) {
+export default function FactsCard({ data, loading, error, regionLabel }: Props) {
   if (loading) {
     return (
       <div className="card">
@@ -76,6 +80,7 @@ export default function FactsCard({ data, loading, error }: Props) {
   }
 
   const f = data.facts;
+  const region = regionLabel ?? '같은 구';
 
   return (
     <div className="card">
@@ -133,6 +138,30 @@ export default function FactsCard({ data, loading, error }: Props) {
         </div>
       </div>
 
+      {data.turnover && (
+        <div className="compare">
+          <div className="compare-head">
+            회전율은 {region}에서 어디쯤인가
+            <span className="muted">
+              {' '}
+              —{' '}
+              {data.turnover.percentile <= 10
+                ? `${region}에서 가장 낮은 편`
+                : data.turnover.percentile >= 90
+                  ? `${region}에서 가장 높은 편`
+                  : `${region} 하위 ${data.turnover.percentile}%`}
+              {` · 중위의 ${data.turnover.vsMedian}배`}
+            </span>
+          </div>
+          <DistBar
+            pos={data.turnover}
+            regionLabel={region}
+            lowLabel="손바뀜 적음"
+            highLabel="손바뀜 활발"
+          />
+        </div>
+      )}
+
       <div className="spec-grid">
         <Spec label="사용승인일" value={f.approvedAt} />
         <Spec label="난방방식" value={f.heatNm} />
@@ -148,8 +177,17 @@ export default function FactsCard({ data, loading, error }: Props) {
       <ul className="notes">
         <li>
           <b>거래 회전율</b>은 최근 1년 매매 건수를 세대수로 나눈 값입니다. 낮으면 매물이
-          잠긴 단지(재건축 대기 등), 높으면 손바뀜이 빠른 단지입니다. 서울 대단지는 대개
-          2~5% 구간에 몰립니다.
+          잠긴 단지(재건축 대기 등), 높으면 손바뀜이 빠른 단지입니다.
+          {data.turnover ? (
+            <>
+              {' '}
+              위의 비교 띠는 <b>{region} 안에서 세대수를 아는 단지 {data.turnover.distribution.count}곳</b>을
+              같은 방식으로 계산해 늘어놓은 것입니다. 낮은 게 좋다/나쁘다는 뜻이 아닙니다 —
+              재건축을 기다리는 단지는 원래 낮습니다.
+            </>
+          ) : (
+            ' 서울 대단지는 대개 2~5% 구간에 몰립니다.'
+          )}
         </li>
         <li>
           <b>전월세 신고율은 임대 비중이 아닙니다.</b> 전월세 계약은 보통 2년이라 매년

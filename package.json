@@ -20,7 +20,9 @@
     "db:size": "tsx scripts/db-size.ts",
     "similar:check": "tsx scripts/similar-check.ts",
     "ingest:kapt": "tsx scripts/ingest-kapt.ts",
-    "facts:check": "tsx scripts/facts-check.ts"
+    "facts:check": "tsx scripts/facts-check.ts",
+    "metrics:probe": "tsx scripts/metrics-probe.ts",
+    "metrics:apt": "tsx scripts/metrics-apt.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",

@@ -3,9 +3,12 @@
 import { useState } from 'react';
 import type { Rent, RentSummary } from '@/lib/types';
 import { CONFIDENCE_LABEL, krw, krwShort, pyeong, shortDate } from '@/lib/format';
+import DistBar, { type Positioned } from './DistBar';
 
 export type RentResponse = {
   selectedArea: number;
+  /** 같은 구 분포 안에서의 전세가율 위치 — 없으면 비교 줄을 접는다 */
+  jeonseRatio?: Positioned | null;
   summary: RentSummary | null;
   rents: Rent[];
   complexRentCount: number;
@@ -18,6 +21,8 @@ type Props = {
   error: string | null;
   /** 같은 평형의 매매 추정가 (만원) — 전세가율 계산용 */
   salePrice: number | null;
+  /** 비교 대상 지역 이름 (예: 강남구) */
+  regionLabel?: string;
 };
 
 /** 전월세 자료는 매매와 별도 활용신청이 필요해서, 그 오류만 따로 안내한다. */
@@ -42,8 +47,9 @@ function NotEnabled({ message }: { message: string }) {
   );
 }
 
-export default function RentCard({ data, loading, error, salePrice }: Props) {
+export default function RentCard({ data, loading, error, salePrice, regionLabel }: Props) {
   const [open, setOpen] = useState(false);
+  const region = regionLabel ?? '같은 구';
 
   if (loading) {
     return (
@@ -182,6 +188,30 @@ export default function RentCard({ data, loading, error, salePrice }: Props) {
             </div>
           </div>
 
+          {data.jeonseRatio && (
+            <div className="compare">
+              <div className="compare-head">
+                전세가율은 {region}에서 어디쯤인가
+                <span className="muted">
+                  {' '}
+                  —{' '}
+                  {data.jeonseRatio.percentile <= 10
+                    ? `${region}에서 가장 낮은 편`
+                    : data.jeonseRatio.percentile >= 90
+                      ? `${region}에서 가장 높은 편`
+                      : `${region} 하위 ${data.jeonseRatio.percentile}%`}
+                  {` · 중위의 ${data.jeonseRatio.vsMedian}배`}
+                </span>
+              </div>
+              <DistBar
+                pos={data.jeonseRatio}
+                regionLabel={region}
+                lowLabel="매매가가 전세보다 훨씬 높음"
+                highLabel="전세가 매매가에 가까움"
+              />
+            </div>
+          )}
+
           <button
             className="btn btn-ghost"
             onClick={() => setOpen((v) => !v)}
@@ -241,6 +271,15 @@ export default function RentCard({ data, loading, error, salePrice }: Props) {
               전세가율은 <b>같은 평형의 전세 추정 ÷ 매매 추정</b>입니다. 두 추정 모두 오차가
               있으니 비율도 그만큼 흔들립니다.
             </li>
+            {data.jeonseRatio && (
+              <li>
+                위 비교 띠의 값은 위 타일과 <b>계산 방식이 다릅니다.</b> 타일은 회귀 추정끼리
+                나눈 값이고, 비교 띠는 {region}의 단지{' '}
+                {data.jeonseRatio.distribution.count}곳을 모두 같은 잣대로 재기 위해{' '}
+                <b>같은 평형의 중위 전세 ÷ 중위 매매</b>로 계산했습니다. 그래서 두 숫자가
+                조금 다를 수 있고, 띠에서 읽을 것은 절대값이 아니라 <b>위치</b>입니다.
+              </li>
+            )}
             <li>
               보증금이 있는 월세(반전세)는 월세로 분류했습니다. 표에서 보증금/월세를 같이
               확인하세요.

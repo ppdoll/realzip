@@ -1,4 +1,5 @@
 import type { KaptInfo } from './kapt';
+import { matchKapt } from './kapt-match';
 import { fetchAllPaged, serverClient } from './supabase';
 
 /**
@@ -125,13 +126,11 @@ export async function kaptIngested(lawdCd: string): Promise<{ complexes: number;
   return { complexes: Number(data.complexes), at: String(data.fetched_at) };
 }
 
-const norm = (s: string) =>
-  (s ?? '').replace(/\s+/g, '').replace(/[()[\]·.,\-_/]/g, '').toLowerCase();
-
 /**
  * 실거래가 단지 → 단지 정보 찾기.
- * 지번이 맞는 것을 우선하고, 없으면 같은 법정동에서 이름이 한쪽에 포함되는 것을 본다
- * (동명이 여럿 걸리면 잘못 붙이는 것보다 안 붙이는 게 낫다고 보고 포기한다).
+ *
+ * 매칭 규칙은 `kapt-match.ts` 한 곳에 있다 — 구 분포 계산도 같은 함수를 쓴다.
+ * 여기서는 시군구 단위로 후보를 한 번 끌어오고 판단은 그 순수 함수에 맡긴다.
  */
 export async function findKapt(
   lawdCd: string,
@@ -139,50 +138,17 @@ export async function findKapt(
   jibun: string | null,
   aptNm: string,
 ): Promise<KaptRow | null> {
-  const db = serverClient();
-
-  if (jibun) {
-    const { data, error } = await db
-      .from('apt_kapt')
-      .select('*')
-      .eq('lawd_cd', lawdCd)
-      .eq('umd_nm', umdNm)
-      .eq('jibun', jibun)
-      .limit(2);
-    if (error) throw wrapDbError('apt_kapt 조회 실패', error.message);
-    if (data && data.length === 1) return rowToKapt(data[0] as Record<string, unknown>);
-    // 같은 지번에 둘 이상이면 이름으로 가린다
-    if (data && data.length > 1) {
-      const target = norm(aptNm);
-      const hit = (data as Record<string, unknown>[]).find((r) => {
-        const n = norm(String(r.kapt_name));
-        return n === target || n.includes(target) || target.includes(n);
-      });
-      if (hit) return rowToKapt(hit);
-    }
+  let rows: Record<string, unknown>[];
+  try {
+    rows = await fetchAllPaged<Record<string, unknown>>(
+      () => serverClient().from('apt_kapt').select('*').eq('lawd_cd', lawdCd),
+      { label: 'apt_kapt 조회', hardLimit: 5_000 },
+    );
+  } catch (e) {
+    throw wrapDbError('apt_kapt 조회 실패', e instanceof Error ? e.message : String(e));
   }
-
-  // 지번이 없거나 못 찾은 경우: 같은 법정동에서 이름으로
-  const { data, error } = await db
-    .from('apt_kapt')
-    .select('*')
-    .eq('lawd_cd', lawdCd)
-    .eq('umd_nm', umdNm)
-    .limit(200);
-  if (error) throw wrapDbError('apt_kapt 조회 실패', error.message);
-  if (!data || data.length === 0) return null;
-
-  const target = norm(aptNm);
-  const digits = (v: string) => (v.match(/\d+/g) ?? []).join(',');
-  const candidates = (data as Record<string, unknown>[]).filter((r) => {
-    const n = norm(String(r.kapt_name));
-    // 숫자가 둘 다 있으면 같아야 한다 (까치마을 1단지 vs 2단지)
-    const dt = digits(target);
-    const dn = digits(n);
-    if (dt && dn && dt !== dn) return false;
-    return n === target || n.includes(target) || target.includes(n);
-  });
-  return candidates.length === 1 ? rowToKapt(candidates[0]) : null;
+  if (rows.length === 0) return null;
+  return matchKapt(rows.map(rowToKapt), { umdNm, jibun, aptNm });
 }
 
 /** 커버리지 확인용 — 시군구별 적재 현황 */
