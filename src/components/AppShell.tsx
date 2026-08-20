@@ -9,6 +9,7 @@ import IndexChart from './IndexChart';
 import PriceChart from './PriceChart';
 import RentCard, { type RentResponse } from './RentCard';
 import SearchHistory, { HISTORY_LIMIT, type HistoryEntry } from './SearchHistory';
+import SimilarCard, { type SimilarResponse } from './SimilarCard';
 import TradeTable from './TradeTable';
 
 type SearchResponse = {
@@ -58,6 +59,10 @@ export default function AppShell({ sidoList }: { sidoList: { sido: string; regio
   const [rent, setRent] = useState<RentResponse | null>(null);
   const [rentLoading, setRentLoading] = useState(false);
   const [rentError, setRentError] = useState<string | null>(null);
+
+  const [similar, setSimilar] = useState<SimilarResponse | null>(null);
+  const [similarLoading, setSimilarLoading] = useState(false);
+  const [similarError, setSimilarError] = useState<string | null>(null);
 
   /** 이번 세션 조회 기록 — 로그인이 없으므로 저장하지 않고 메모리에만 둔다 */
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -123,6 +128,8 @@ export default function AppShell({ sidoList }: { sidoList: { sido: string; regio
     setArea(null);
     setRent(null);
     setRentError(null);
+    setSimilar(null);
+    setSimilarError(null);
     try {
       const url = `/api/search?lawdCd=${lawdCd}${query ? `&q=${encodeURIComponent(query)}` : ''}`;
       const res = await fetch(url);
@@ -161,6 +168,38 @@ export default function AppShell({ sidoList }: { sidoList: { sido: string; regio
     [],
   );
 
+  /**
+   * 비슷한 가격대 서울 아파트 — 기준 금액이 필요해서 매매 추정 결과가 온 뒤에 부른다.
+   * (전월세는 금액이 필요 없어 매매와 동시에 출발한다.)
+   */
+  const loadSimilar = useCallback(
+    async (region: string, aptSeq: string, area: number, price: number) => {
+      const reqId = reqIdRef.current;
+      setSimilarLoading(true);
+      setSimilarError(null);
+      setSimilar(null);
+      try {
+        const params = new URLSearchParams({
+          lawdCd: region,
+          aptSeq,
+          area: String(area),
+          price: String(price),
+        });
+        const res = await fetch(`/api/similar?${params}`);
+        const json = await res.json();
+        if (reqId !== reqIdRef.current) return;
+        if (!res.ok) throw new Error(json.error ?? '추천 조회에 실패했습니다.');
+        setSimilar(json as SimilarResponse);
+      } catch (e) {
+        if (reqId !== reqIdRef.current) return;
+        setSimilarError(e instanceof Error ? e.message : String(e));
+      } finally {
+        if (reqId === reqIdRef.current) setSimilarLoading(false);
+      }
+    },
+    [],
+  );
+
   const loadComplex = useCallback(
     async (aptSeq: string, opts: { region?: string; area?: number | null; floor?: string } = {}) => {
       const region = opts.region ?? lawdCd;
@@ -185,6 +224,13 @@ export default function AppShell({ sidoList }: { sidoList: { sido: string; regio
         if (reqId !== reqIdRef.current) return;
         setDetail(d);
         setArea(d.selectedArea);
+        // 추천은 기준 금액(예상가)이 있어야 해서 매매 결과가 온 뒤에 출발한다
+        if (d.estimate) {
+          void loadSimilar(d.region.code, aptSeq, d.selectedArea, d.estimate.price);
+        } else {
+          setSimilar(null);
+          setSimilarError(null);
+        }
       } catch (e) {
         if (reqId !== reqIdRef.current) return;
         setDetail(null);
@@ -193,7 +239,7 @@ export default function AppShell({ sidoList }: { sidoList: { sido: string; regio
         if (reqId === reqIdRef.current) setDetailLoading(false);
       }
     },
-    [lawdCd, remember, loadRent],
+    [lawdCd, remember, loadRent, loadSimilar],
   );
 
   /** 기록에서 되돌아가기 — 다른 시군구면 필터도 같이 맞춘다 */
@@ -451,6 +497,23 @@ export default function AppShell({ sidoList }: { sidoList: { sido: string; regio
                 loading={rentLoading}
                 error={rentError}
                 salePrice={detail.estimate?.price ?? null}
+              />
+
+              <SimilarCard
+                data={similar}
+                loading={similarLoading}
+                error={similarError}
+                onSelect={(code, seq, a) => {
+                  if (code !== lawdCd) {
+                    const sd = sidoByCode.get(code);
+                    if (sd) setSido(sd);
+                    setLawdCd(code);
+                    setSearch(null);
+                  }
+                  setFloor('');
+                  void loadComplex(seq, { region: code, area: a });
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
               />
 
               <div className="card">

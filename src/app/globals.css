@@ -677,3 +677,99 @@ table.data tr.canceled td {
   color: var(--text-muted);
   margin: 10px 0 0;
 }
+
+/* ── 유사 가격대 추천 ─────────────────────────────────────────────────── */
+.sim-region + .sim-region {
+  margin-top: 14px;
+}
+
+.sim-region-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 14px;
+  padding: 0 2px 6px;
+  border-bottom: 1px solid var(--grid);
+  margin-bottom: 6px;
+}
+
+.sim-region-head .nm {
+  font-weight: 650;
+  font-size: 13.5px;
+}
+
+.sim-region-head .stats {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.sim-region-head .stats b {
+  color: var(--text-primary);
+  font-weight: 620;
+}
+
+.sim-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sim-item {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 76px 104px 92px;
+  gap: 10px;
+  align-items: center;
+  text-align: left;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: var(--surface-1);
+  cursor: pointer;
+}
+
+.sim-item:hover {
+  border-color: var(--series-1);
+  background: var(--series-1-wash);
+}
+
+.sim-item .nm {
+  display: block;
+  font-weight: 600;
+  font-size: 13.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sim-item .sub {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.sim-item .c2,
+.sim-item .c3,
+.sim-item .c4 {
+  text-align: right;
+  font-size: 13px;
+}
+
+.sim-item .c3 b {
+  font-weight: 650;
+}
+
+@media (max-width: 560px) {
+  .sim-item {
+    grid-template-columns: minmax(0, 1fr) 92px;
+    row-gap: 4px;
+  }
+  .sim-item .c2 {
+    display: none;
+  }
+}
