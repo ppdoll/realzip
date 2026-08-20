@@ -139,8 +139,12 @@ async function replaceMonths(lawdCd: string, results: RentMonthResult[]): Promis
       updated_at: new Date().toISOString(),
     }));
 
+    // 매매와 같은 이유로 upsert(중복 무시). delete → insert 가 원자적이지 않아
+    // 동시 적재 시 PK 충돌이 날 수 있고, id 가 결정적이라 중복 무시가 안전하다.
     for (let i = 0; i < rows.length; i += 500) {
-      const { error } = await db.from('apt_rent').insert(rows.slice(i, i + 500));
+      const { error } = await db
+        .from('apt_rent')
+        .upsert(rows.slice(i, i + 500), { onConflict: 'id', ignoreDuplicates: true });
       if (error) throw wrapDbError('apt_rent 적재 실패(' + r.ym + ')', error.message);
     }
 

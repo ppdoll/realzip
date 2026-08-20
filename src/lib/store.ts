@@ -153,8 +153,15 @@ async function replaceMonths(lawdCd: string, results: MonthResult[]): Promise<vo
       updated_at: new Date().toISOString(),
     }));
 
+    // insert 가 아니라 upsert(ignoreDuplicates) 로 쓴다.
+    // delete → insert 는 원자적이지 않아서, 같은 (시군구, 월)을 두 곳에서 동시에
+    // 적재하면 한쪽 delete 가 다른 쪽 insert 뒤에 끼어들어 PK 충돌이 난다
+    // (서울 일괄 적재에서 관악구 202503 이 실제로 이렇게 실패했다).
+    // id 가 결정적인 자연키라 중복 무시가 안전하다 — 같은 행이 두 번 와도 결과가 같다.
     for (let i = 0; i < rows.length; i += 500) {
-      const { error } = await db.from('apt_trade').insert(rows.slice(i, i + 500));
+      const { error } = await db
+        .from('apt_trade')
+        .upsert(rows.slice(i, i + 500), { onConflict: 'id', ignoreDuplicates: true });
       if (error) throw new Error(`apt_trade 적재 실패(${r.ym}): ${error.message}`);
     }
 

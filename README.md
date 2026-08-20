@@ -154,6 +154,23 @@ SUPABASE_SERVICE_ROLE_KEY=eyJ...
    npm run db:check
    ```
 
+### 지역 미리 담아두기
+
+첫 조회가 느린 게 싫으면 미리 받아둘 수 있습니다. 이미 받아둔 달은 건너뛰므로
+중간에 끊고 다시 돌려도 됩니다.
+
+```bash
+npm run ingest -- 서울            # 시/도 이름으로 (매매 3년 + 전월세 1년)
+npm run ingest -- 11110 11140     # 시군구 코드로
+npm run ingest -- 경기도 --dry    # 무엇을 받을지만 확인
+npm run ingest -- 서울 --rent-only
+```
+
+시작 전에 호출 수와 예상 용량을, 끝나고 실제 증가량과 무료 티어 사용률을 알려줍니다.
+**전국을 한 번에 담으면 무료 티어를 넘깁니다** — 시/도 단위로 나눠 돌리고 `db:check` 로
+여유를 보면서 늘리세요. 지역당 약 6MB(매매 3년 4.5MB + 전월세 1년 1.4MB)라
+500MB 로 약 80곳까지 들어갑니다.
+
 `service_role` 키는 RLS 를 우회하므로 **서버에서만** 쓰입니다. `NEXT_PUBLIC_` 접두어를
 붙이지 마세요 — 붙이면 브라우저로 노출됩니다. 연결되면 화면 안내에서 "메모리 캐시 모드"
 문구가 사라집니다.
@@ -385,6 +402,7 @@ src/
   data/regions.ts 법정동코드 시군구 목록 (전국 250여 곳)
   components/     차트 · 통계 타일 · 표 · 조회 기록 (외부 차트 라이브러리 없음, SVG 직접)
 scripts/
+  ingest.ts          지역 미리 적재 (매매 3년 + 전월세 1년)
   db-setup.ts        Supabase 테이블 생성 (schema.sql 실행)
   db-check.ts        Supabase 연결·읽기·쓰기·용량 점검
   probe-api.ts       시군구 코드 유효성 점검 (--raw 로 원본 태그 확인)
