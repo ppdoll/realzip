@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { assertCanIngestNewRegion } from './capacity';
 import { fetchMonths, type MonthResult } from './molit';
-import { isSupabaseConfigured, serverClient } from './supabase';
+import { fetchAllPaged, isSupabaseConfigured, serverClient } from './supabase';
 import { addMonths, monthRange, toYm } from './months';
 import type { Trade } from './types';
 
@@ -291,6 +292,9 @@ export async function getRegionTrades(
   const missing = yms.filter((ym) => !fresh.has(ym));
 
   if (!opts.onlyCached && missing.length > 0) {
+    // 아직 한 달도 없는 지역이면 새 지역이다 — 용량 한계면 여기서 막는다.
+    // 이미 담아둔 지역의 갱신은 통과시켜야 최신 신고가 계속 들어온다.
+    if (missing.length === yms.length) await assertCanIngestNewRegion(lawdCd);
     const results = await fetchMonths(lawdCd, missing, {
       concurrency: opts.concurrency ?? 6,
     });
@@ -327,14 +331,14 @@ function assertUsable(
 export async function regionsByStaleness(
   months: string[],
 ): Promise<{ lawdCd: string; oldestFetchedAt: number }[]> {
-  const { data, error } = await supabase()
-    .from('ingest_log')
-    .select('lawd_cd, fetched_at')
-    .in('deal_ym', months);
-  if (error) throw new Error(`ingest_log 조회 실패: ${error.message}`);
+  // 지역 × 월 이므로 지역이 늘면 1,000행을 넘는다 — 잘리면 크론이 일부 지역을 영구히 건너뛴다
+  const data = await fetchAllPaged<{ lawd_cd: string; fetched_at: string }>(
+    () => supabase().from('ingest_log').select('lawd_cd, fetched_at').in('deal_ym', months),
+    { label: 'ingest_log 조회' },
+  );
 
   const oldest = new Map<string, number>();
-  for (const row of data ?? []) {
+  for (const row of data) {
     const code = row.lawd_cd as string;
     const at = new Date(row.fetched_at as string).getTime();
     const cur = oldest.get(code);

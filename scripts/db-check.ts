@@ -8,7 +8,7 @@
  */
 // 앱이 실제로 쓰는 클라이언트를 그대로 쓴다 (Realtime transport 처리 포함).
 // serverClient() 는 호출 시점에 환경변수를 읽으므로 정적 import 로 충분하다.
-import { classifyKey, KEY_LABEL, serverClient } from '../src/lib/supabase';
+import { classifyKey, fetchAllPaged, KEY_LABEL, serverClient } from '../src/lib/supabase';
 import { WINDOW_MONTHS } from '../src/lib/config';
 import { recentMonths } from '../src/lib/months';
 import { regionLabel } from '../src/data/regions';
@@ -135,9 +135,20 @@ async function main() {
   // 수집 중 한 달이 실패하면 그 달만 ingest_log 에 안 남고, 그 지역을 조회할 때마다
   // 그 달을 다시 부른다. 조용히 트래픽을 새게 하는 유형이라 눈에 보이게 해둔다.
   if (counts.ingest_log !== undefined && counts.ingest_log > 0) {
-    const { data, error } = await db.from('ingest_log').select('lawd_cd, deal_ym, rows');
-    if (error) {
-      step(false, 'ingest_log 월 커버리지', error.message);
+    // 페이지네이션 필수 — 지역이 28곳을 넘으면 1,000행 상한에 걸려
+    // 있는 데이터를 "누락된 달"로 잘못 보고한다 (실제로 겪었다).
+    let data: { lawd_cd: string; deal_ym: string; rows: number }[] | null = null;
+    let coverageError: string | null = null;
+    try {
+      data = await fetchAllPaged<{ lawd_cd: string; deal_ym: string; rows: number }>(
+        () => db.from('ingest_log').select('lawd_cd, deal_ym, rows'),
+        { label: 'ingest_log 커버리지 조회' },
+      );
+    } catch (e) {
+      coverageError = e instanceof Error ? e.message : String(e);
+    }
+    if (coverageError) {
+      step(false, 'ingest_log 월 커버리지', coverageError);
     } else {
       const months = recentMonths(WINDOW_MONTHS);
       const byRegion = new Map<string, Set<string>>();

@@ -68,3 +68,37 @@ export function classifyKey(key: string): KeyKind {
   }
   return 'unknown';
 }
+
+/**
+ * 페이지네이션된 전체 조회.
+ *
+ * PostgREST 는 요청당 기본 1,000행에서 **조용히 잘린다.** 이 프로젝트에서 같은 실수를
+ * 세 번 했다 — 전월세 조회에서 최근 6개월이 사라졌고, ingest_log 커버리지 리포트가
+ * 지역이 늘자 "누락된 달"을 거짓으로 보고했다. 그래서 전체 조회는 이 헬퍼만 쓴다.
+ *
+ * 짧은 페이지가 오면 끝이고, 안전 상한에 닿으면 **던진다** — 잘린 결과를 돌려주는 것보다
+ * 시끄럽게 실패하는 편이 낫다.
+ */
+export async function fetchAllPaged<T>(
+  makeQuery: () => {
+    range: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>;
+  },
+  opts: { page?: number; hardLimit?: number; label?: string } = {},
+): Promise<T[]> {
+  const page = opts.page ?? 1000;
+  const hardLimit = opts.hardLimit ?? 500_000;
+  const label = opts.label ?? '조회';
+  const out: T[] = [];
+
+  for (let offset = 0; offset < hardLimit; offset += page) {
+    const { data, error } = await makeQuery().range(offset, offset + page - 1);
+    if (error) throw new Error(`${label} 실패: ${error.message}`);
+    if (!data || data.length === 0) return out;
+    out.push(...data);
+    if (data.length < page) return out;
+  }
+  throw new Error(
+    `${label}가 안전 상한(${hardLimit.toLocaleString('ko-KR')}행)에 닿았습니다. ` +
+      '조용히 자르지 않기 위해 실패로 처리합니다 — 조건을 좁히거나 상한을 올리세요.',
+  );
+}
