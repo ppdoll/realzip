@@ -17,8 +17,8 @@ import { loadEnv } from './env';
 
 loadEnv();
 
-/** 지역당 대략 용량 (실측: 매매 3년 ~4.5MB + 전월세 1년 ~1.4MB) */
-const MB_PER_REGION = 6;
+/** 지역당 용량 — npm run db:size 실측 기준 (매매 3년 + 전월세 1년, 인덱스 포함) */
+const MB_PER_REGION = 7;
 const FREE_TIER_MB = 500;
 /** 기본 상한 — 무료 티어의 84%. 여유를 남겨 크론 갱신이 막히지 않게 한다. */
 const DEFAULT_MAX_MB = 420;
@@ -154,7 +154,7 @@ async function main() {
     return { trades: t.count ?? 0, rents: r.count ?? 0 };
   };
   const before = await sizeNow();
-  const estMb = ((before.trades + before.rents) * 450) / 1024 / 1024;
+  const estMb = ((before.trades + before.rents) * 390) / 1024 / 1024;
   console.log(
     `현재 매매 ${before.trades.toLocaleString('ko-KR')}행 · 전월세 ${before.rents.toLocaleString('ko-KR')}행 ` +
       `(약 ${estMb.toFixed(1)}MB / ${FREE_TIER_MB}MB)\n`,
@@ -172,7 +172,7 @@ async function main() {
   const t0 = Date.now();
   const currentMb = async () => {
     const c = await sizeNow();
-    return ((c.trades + c.rents) * 450) / 1024 / 1024;
+    return ((c.trades + c.rents) * 390) / 1024 / 1024;
   };
 
   for (let i = 0; i < targets.length; i++) {
@@ -216,7 +216,7 @@ async function main() {
   }
 
   const after = await sizeNow();
-  const afterMb = ((after.trades + after.rents) * 450) / 1024 / 1024;
+  const afterMb = ((after.trades + after.rents) * 390) / 1024 / 1024;
   console.log(
     `\n완료 — 성공 ${ok} / 실패 ${failed} · ${((Date.now() - t0) / 1000).toFixed(0)}초`,
   );

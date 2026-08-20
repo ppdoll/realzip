@@ -16,8 +16,8 @@ import { loadEnv } from './env';
 
 loadEnv();
 
-/** 행당 대략 바이트 (인덱스 포함 추정) */
-const BYTES_PER_ROW = 450;
+/** 행당 바이트 — npm run db:size 로 실측 (인덱스 포함, 2026-08 기준) */
+const BYTES_PER_ROW = 390;
 const FREE_TIER_BYTES = 500 * 1024 * 1024;
 
 async function main() {

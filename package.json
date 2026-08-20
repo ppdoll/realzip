@@ -16,7 +16,8 @@
     "db:setup": "tsx scripts/db-setup.ts",
     "db:check": "tsx scripts/db-check.ts",
     "rent:check": "tsx scripts/rent-parse-check.ts",
-    "ingest": "tsx scripts/ingest.ts"
+    "ingest": "tsx scripts/ingest.ts",
+    "db:size": "tsx scripts/db-size.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",

@@ -2,7 +2,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { assertCanIngestNewRegion } from './capacity';
 import { fetchMonths, type MonthResult } from './molit';
 import { fetchAllPaged, isSupabaseConfigured, serverClient } from './supabase';
-import { addMonths, monthRange, toYm } from './months';
+import { WINDOW_MONTHS } from './config';
+import { addMonths, monthRange, recentMonths, toYm } from './months';
 import type { Trade } from './types';
 
 /**
@@ -352,4 +353,44 @@ export async function regionsByStaleness(
 /** 특정 단지의 거래만 (시군구 데이터를 받은 뒤 필터) */
 export function filterComplex(trades: Trade[], aptSeq: string): Trade[] {
   return trades.filter((t) => t.aptSeq === aptSeq);
+}
+
+
+/**
+ * 조회 창(최근 3년)을 벗어난 매매를 지운다.
+ *
+ * 창이 매달 굴러가는데 정리하지 않으면 오래된 달이 영구히 남는다 —
+ * 54개 지역 기준 매달 약 5.6MB 씩 무한정 늘어난다.
+ * 전월세와 같은 방식이고, 크론이 갱신 후에 불러 준다.
+ */
+export async function pruneOldTrades(
+  now = new Date(),
+): Promise<{ cutoff: string; trades: number; logs: number }> {
+  const cutoff = recentMonths(WINDOW_MONTHS, now)[0];
+  const db = supabase();
+
+  const before = await db
+    .from('apt_trade')
+    .select('*', { count: 'exact', head: true })
+    .lt('deal_ym', cutoff);
+  if (before.error) throw new Error(`apt_trade 정리 대상 조회 실패: ${before.error.message}`);
+
+  const beforeLogs = await db
+    .from('ingest_log')
+    .select('*', { count: 'exact', head: true })
+    .lt('deal_ym', cutoff);
+  if (beforeLogs.error) {
+    throw new Error(`ingest_log 정리 대상 조회 실패: ${beforeLogs.error.message}`);
+  }
+
+  const trades = before.count ?? 0;
+  const logs = beforeLogs.count ?? 0;
+  if (trades === 0 && logs === 0) return { cutoff, trades: 0, logs: 0 };
+
+  const d1 = await db.from('apt_trade').delete().lt('deal_ym', cutoff);
+  if (d1.error) throw new Error(`apt_trade 정리 실패: ${d1.error.message}`);
+  const d2 = await db.from('ingest_log').delete().lt('deal_ym', cutoff);
+  if (d2.error) throw new Error(`ingest_log 정리 실패: ${d2.error.message}`);
+
+  return { cutoff, trades, logs };
 }

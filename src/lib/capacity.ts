@@ -11,8 +11,12 @@ import { serverClient } from './supabase';
  * 실제 바이트를 재려면 Postgres 접속이 필요해서, 행 수 × 실측 평균으로 추정한다.
  */
 
-/** 행당 평균 바이트 (인덱스 포함 실측 추정) */
-const BYTES_PER_ROW = 450;
+/**
+ * 행당 평균 바이트 (인덱스 포함).
+ * `npm run db:size` 로 실측한 값 — apt_trade 379B, apt_rent 399B (2026-08, 100만 행 기준).
+ * 처음엔 450 으로 잡았다가 13% 과대추정이라 교정했다.
+ */
+const BYTES_PER_ROW = 390;
 const FREE_TIER_BYTES = 500 * 1024 * 1024;
 /** 이 비율을 넘으면 새 지역을 받지 않는다 */
 const STOP_RATIO = 0.92;
