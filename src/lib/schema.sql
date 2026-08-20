@@ -41,9 +41,47 @@ create table if not exists ingest_log (
   primary key (lawd_cd, deal_ym)
 );
 
+-- ── 전월세 ────────────────────────────────────────────────────────────────
+-- 전월세 API 에는 aptSeq 가 없어서 단지 매칭을 (법정동+단지명+지번) 으로 한다.
+create table if not exists apt_rent (
+  -- 법정동|단지명|지번|계약일|전용면적|층|보증금|월세 (+ 동일 신고 여럿이면 #2, #3)
+  id             text primary key,
+  lawd_cd        text        not null,
+  deal_ym        text        not null,
+  umd_nm         text        not null,
+  apt_nm         text        not null,
+  jibun          text,
+  build_year     int,
+  area           numeric(9,4) not null,   -- 전용면적 m²
+  floor          int,
+  deal_date      date        not null,    -- 계약일
+  deposit        int         not null,    -- 보증금 (만원)
+  monthly_rent   int         not null default 0,  -- 월세 (만원). 0 이면 전세
+  contract_term  text,
+  contract_type  text,
+  pre_deposit    int,
+  pre_monthly_rent int,
+  use_rr_right   text,
+  updated_at     timestamptz not null default now()
+);
+
+create index if not exists apt_rent_region_idx on apt_rent (lawd_cd, deal_date desc);
+create index if not exists apt_rent_name_idx   on apt_rent (lawd_cd, apt_nm);
+create index if not exists apt_rent_ym_idx     on apt_rent (lawd_cd, deal_ym);
+
+create table if not exists rent_ingest_log (
+  lawd_cd    text        not null,
+  deal_ym    text        not null,
+  rows       int         not null default 0,
+  fetched_at timestamptz not null default now(),
+  primary key (lawd_cd, deal_ym)
+);
+
 -- 서버(service_role)에서만 접근하므로 RLS 를 켜고 정책은 두지 않는다.
-alter table apt_trade  enable row level security;
-alter table ingest_log enable row level security;
+alter table apt_trade       enable row level security;
+alter table ingest_log      enable row level security;
+alter table apt_rent        enable row level security;
+alter table rent_ingest_log enable row level security;
 
 -- 이미 numeric(8,2) 로 만들어 둔 경우에만 (전용면적 소수 3자리 보존):
 --   alter table apt_trade alter column area type numeric(9,4);

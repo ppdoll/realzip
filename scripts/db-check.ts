@@ -78,7 +78,7 @@ async function main() {
   const counts: Record<string, number> = {};
   let missingTable = false;
 
-  for (const table of ['apt_trade', 'ingest_log']) {
+  for (const table of ['apt_trade', 'ingest_log', 'apt_rent', 'rent_ingest_log']) {
     const probe = await db.from(table).select('*').limit(1);
     if (probe.error) {
       step(false, `${table} 읽기`, probe.error.message);
@@ -172,13 +172,17 @@ async function main() {
   }
 
   // 4) 적재량과 무료 티어 여유
-  const rows = counts.apt_trade ?? 0;
-  const months = counts.ingest_log ?? 0;
+  const rows = (counts.apt_trade ?? 0) + (counts.apt_rent ?? 0);
+  const months = (counts.ingest_log ?? 0) + (counts.rent_ingest_log ?? 0);
   if (rows > 0 || months > 0) {
     const est = rows * BYTES_PER_ROW;
     const pctFree = (est / FREE_TIER_BYTES) * 100;
     console.log('');
-    console.log(`적재 현황: 거래 ${rows.toLocaleString('ko-KR')}행 · 수집한 (시군구×월) ${months.toLocaleString('ko-KR')}건`);
+    console.log(
+      `적재 현황: 매매 ${(counts.apt_trade ?? 0).toLocaleString('ko-KR')}행 · ` +
+        `전월세 ${(counts.apt_rent ?? 0).toLocaleString('ko-KR')}행 · ` +
+        `수집한 (시군구×월) ${months.toLocaleString('ko-KR')}건`,
+    );
     console.log(
       `테이블 추정 용량: 약 ${(est / 1024 / 1024).toFixed(1)}MB (무료 티어 500MB의 ${pctFree.toFixed(1)}%)`,
     );

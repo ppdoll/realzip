@@ -3,6 +3,7 @@ import { regionLabel } from '@/data/regions';
 import { FETCH_CONCURRENCY } from '@/lib/config';
 import { recentMonths } from '@/lib/months';
 import { getRegionTrades, regionsByStaleness, storeMode } from '@/lib/store';
+import { getRegionRents } from '@/lib/store-rent';
 
 export const dynamic = 'force-dynamic';
 
@@ -100,11 +101,19 @@ export async function GET(req: Request) {
     lawdCd: string;
     label: string;
     trades?: number;
+    rents?: number;
     staleHours: number;
     ms: number;
     error?: string;
+    rentError?: string;
   }[] = [];
   let budgetHit = false;
+  /**
+   * 전월세는 매매와 별도 활용신청이 필요하고, 표도 따로 만들어야 한다.
+   * 둘 중 하나가 안 되어 있으면 지역마다 똑같이 실패하므로, 한 번 확인하면
+   * 이번 실행에서는 더 시도하지 않는다.
+   */
+  let rentDisabledReason: string | null = null;
 
   for (const item of queue) {
     if (results.length >= maxRegions) break;
@@ -123,12 +132,36 @@ export async function GET(req: Request) {
         concurrency: FETCH_CONCURRENCY,
         force: true,
       });
+
+      let rents: number | undefined;
+      let rentError: string | undefined;
+      if (rentDisabledReason === null) {
+        try {
+          const rr = await getRegionRents(item.lawdCd, from, to, {
+            concurrency: FETCH_CONCURRENCY,
+            force: true,
+          });
+          rents = rr.rents.length;
+        } catch (e) {
+          rentError = e instanceof Error ? e.message : String(e);
+          // 활용신청 문제면 이번 실행 내내 전월세를 건너뛴다
+          // 활용신청 미완 / 표 미생성 — 지역마다 반복해도 결과가 같다
+          if (/활용신청|등록되지 않은|테이블이 없습니다/.test(rentError)) {
+            rentDisabledReason = rentError;
+          }
+        }
+      } else {
+        rentError = '건너뜀 (전월세 미설정)';
+      }
+
       results.push({
         lawdCd: item.lawdCd,
         label: regionLabel(item.lawdCd),
         trades: r.trades.length,
+        rents,
         staleHours,
         ms: Date.now() - t0,
+        rentError,
       });
     } catch (e) {
       results.push({
@@ -150,6 +183,8 @@ export async function GET(req: Request) {
     totalRegions: queue.length,
     refreshed: results.length,
     failed: results.filter((r) => r.error).length,
+    /** 전월세가 미신청이면 그 사유 (이번 실행에서 전월세는 전부 건너뜀) */
+    rentDisabledReason,
     remaining: remaining.length,
     /** 예산이 떨어져 멈췄는지 — true 면 남은 지역은 다음 실행에서 처리된다 */
     budgetHit,

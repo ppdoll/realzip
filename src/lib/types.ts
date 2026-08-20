@@ -91,3 +91,71 @@ export type IndexPoint = {
   /** 해당 월 거래 건수 */
   count: number;
 };
+
+/**
+ * 전월세 신고 1건.
+ *
+ * 매매 API 와 달리 **aptSeq(단지 일련번호)가 없다.** 그래서 단지 매칭은
+ * (법정동 + 단지명 + 지번) 으로 한다. 전용면적 태그도 매매는 excluUseAr,
+ * 전월세는 exclUseAr 로 철자가 다르다.
+ */
+export type Rent = {
+  lawdCd: string;
+  umdNm: string;
+  aptNm: string;
+  jibun: string | null;
+  buildYear: number | null;
+  /** 전용면적 (m²) */
+  area: number;
+  floor: number | null;
+  /** 계약일 YYYY-MM-DD */
+  dealDate: string;
+  /** 계약년월 YYYYMM */
+  dealYm: string;
+  /** 보증금 (만원) */
+  deposit: number;
+  /** 월세 (만원). 0 이면 전세 */
+  monthlyRent: number;
+  /** 계약기간 (예: "26.09~28.09") */
+  contractTerm: string | null;
+  /** 신규 / 갱신 */
+  contractType: string | null;
+  /** 종전 계약 보증금 (만원) */
+  preDeposit: number | null;
+  /** 종전 계약 월세 (만원) */
+  preMonthlyRent: number | null;
+  /** 갱신요구권 사용 여부 */
+  useRRRight: string | null;
+};
+
+/** 전세 = 월세가 0 인 계약 */
+export function isJeonse(r: Rent): boolean {
+  return r.monthlyRent === 0;
+}
+
+export type RentSummary = {
+  /** 기준월 YYYY-MM */
+  asOf: string;
+  area: number;
+  /** 전세 추정 보증금 (만원). 전세 표본이 없으면 null */
+  jeonsePrice: number | null;
+  jeonseLow: number | null;
+  jeonseHigh: number | null;
+  jeonseConfidence: ConfidenceLevel | null;
+  /** 전세 표본 수 (유효) */
+  jeonseSamples: number;
+  /** 전세가율 (%) — 전세 추정 ÷ 매매 추정 × 100. 어느 한쪽이 없으면 null */
+  jeonseRatioPct: number | null;
+  /** 최근 전세 실거래 */
+  lastJeonse: { dealDate: string; deposit: number; floor: number | null } | null;
+  /** 최근 월세 실거래 (보증금/월세) */
+  lastMonthly: {
+    dealDate: string;
+    deposit: number;
+    monthlyRent: number;
+    floor: number | null;
+  } | null;
+  /** 최근 3년 전세 건수 / 월세 건수 */
+  jeonseCount: number;
+  monthlyCount: number;
+};

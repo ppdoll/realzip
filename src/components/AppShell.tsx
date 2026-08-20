@@ -7,6 +7,7 @@ import { krwShort, pyeong } from '@/lib/format';
 import EstimateCard from './EstimateCard';
 import IndexChart from './IndexChart';
 import PriceChart from './PriceChart';
+import RentCard, { type RentResponse } from './RentCard';
 import SearchHistory, { HISTORY_LIMIT, type HistoryEntry } from './SearchHistory';
 import TradeTable from './TradeTable';
 
@@ -53,6 +54,10 @@ export default function AppShell({ sidoList }: { sidoList: { sido: string; regio
   const [floor, setFloor] = useState<string>('');
   const [detail, setDetail] = useState<ComplexResponse | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+
+  const [rent, setRent] = useState<RentResponse | null>(null);
+  const [rentLoading, setRentLoading] = useState(false);
+  const [rentError, setRentError] = useState<string | null>(null);
 
   /** 이번 세션 조회 기록 — 로그인이 없으므로 저장하지 않고 메모리에만 둔다 */
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -116,6 +121,8 @@ export default function AppShell({ sidoList }: { sidoList: { sido: string; regio
     setSelected(null);
     setDetail(null);
     setArea(null);
+    setRent(null);
+    setRentError(null);
     try {
       const url = `/api/search?lawdCd=${lawdCd}${query ? `&q=${encodeURIComponent(query)}` : ''}`;
       const res = await fetch(url);
@@ -130,6 +137,30 @@ export default function AppShell({ sidoList }: { sidoList: { sido: string; regio
     }
   }
 
+  const loadRent = useCallback(
+    async (aptSeq: string, region: string, area?: number | null) => {
+      const reqId = reqIdRef.current;
+      setRentLoading(true);
+      setRentError(null);
+      setRent(null);
+      try {
+        const params = new URLSearchParams({ lawdCd: region, aptSeq });
+        if (area) params.set('area', String(area));
+        const res = await fetch(`/api/rent?${params}`);
+        const json = await res.json();
+        if (reqId !== reqIdRef.current) return;
+        if (!res.ok) throw new Error(json.error ?? '전월세 조회에 실패했습니다.');
+        setRent(json as RentResponse);
+      } catch (e) {
+        if (reqId !== reqIdRef.current) return;
+        setRentError(e instanceof Error ? e.message : String(e));
+      } finally {
+        if (reqId === reqIdRef.current) setRentLoading(false);
+      }
+    },
+    [],
+  );
+
   const loadComplex = useCallback(
     async (aptSeq: string, opts: { region?: string; area?: number | null; floor?: string } = {}) => {
       const region = opts.region ?? lawdCd;
@@ -137,6 +168,8 @@ export default function AppShell({ sidoList }: { sidoList: { sido: string; regio
       setSelected(aptSeq);
       setDetailLoading(true);
       setError(null);
+      // 전월세는 기다리지 않고 같이 출발시킨다 — 매매 결과가 먼저 뜨고 나중에 채워진다.
+      void loadRent(aptSeq, region, opts.area ?? null);
       try {
         const params = new URLSearchParams({ lawdCd: region, aptSeq });
         if (opts.area) params.set('area', String(opts.area));
@@ -160,7 +193,7 @@ export default function AppShell({ sidoList }: { sidoList: { sido: string; regio
         if (reqId === reqIdRef.current) setDetailLoading(false);
       }
     },
-    [lawdCd, remember],
+    [lawdCd, remember, loadRent],
   );
 
   /** 기록에서 되돌아가기 — 다른 시군구면 필터도 같이 맞춘다 */
@@ -412,6 +445,13 @@ export default function AppShell({ sidoList }: { sidoList: { sido: string; regio
                   </div>
                 </div>
               )}
+
+              <RentCard
+                data={rent}
+                loading={rentLoading}
+                error={rentError}
+                salePrice={detail.estimate?.price ?? null}
+              />
 
               <div className="card">
                 <h2 className="card-title">

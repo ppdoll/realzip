@@ -63,7 +63,7 @@ function stableSort(trades: Trade[]): Trade[] {
 }
 
 /** 이 월이 아직 갱신 대상인지 (신고 지연 때문에 최근 몇 달은 계속 늘어난다) */
-function ttlFor(ym: string, now = new Date()): number {
+export function ttlFor(ym: string, now = new Date()): number {
   const cutoff = addMonths(toYm(now), -(RECENT_MONTHS_TO_REFRESH - 1));
   return ym >= cutoff ? RECENT_TTL_MS : OLD_TTL_MS;
 }

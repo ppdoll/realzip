@@ -40,6 +40,11 @@ export function assertServiceKey(): void {
   serviceKey();
 }
 
+/** 전월세 클라이언트도 같은 키를 쓰므로 공개한다 (같은 이중 인코딩 처리 필요). */
+export function molitServiceKey(): string {
+  return serviceKey();
+}
+
 function serviceKey(): string {
   const raw = process.env.MOLIT_SERVICE_KEY?.trim();
   if (!raw) {
