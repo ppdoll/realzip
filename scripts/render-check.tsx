@@ -73,30 +73,6 @@ checks.push(['PriceChart 좌표에 NaN/undefined 없음', !badNums, badNums ? '�
 checks.push(['PriceChart 범례 3항목', (price.match(/<li>/g) ?? []).length >= 3, `${(price.match(/<li>/g) ?? []).length}개`]);
 checks.push(['PriceChart y축 눈금 라벨', /억|만/.test(price), 'ok']);
 
-// 매물 호가 기준선이 실제로 그려지는지
-const asks = [est.price * 0.96, est.price * 1.02, est.price * 1.11];
-const withAsk = renderToStaticMarkup(
-  React.createElement(PriceChart, {
-    trades: chartTrades,
-    index,
-    estimate: est,
-    listings: asks,
-  }),
-);
-checks.push(['호가 범위 띠 렌더', (withAsk.match(/<rect /g) ?? []).length >= 1, 'ok']);
-checks.push(['호가 중위선 직접 라벨', /호가 중위/.test(withAsk), 'ok']);
-checks.push([
-  '호가 범례 항목 추가',
-  (withAsk.match(/<li>/g) ?? []).length > (price.match(/<li>/g) ?? []).length,
-  `${(withAsk.match(/<li>/g) ?? []).length}개`,
-]);
-checks.push(['호가 렌더에 NaN 없음', !/(NaN|Infinity)/.test(withAsk), 'ok']);
-checks.push([
-  '호가가 y축 범위에 포함됨',
-  !/<rect [^>]*y="-/.test(withAsk),
-  'ok',
-]);
-
 const idx = renderToStaticMarkup(React.createElement(IndexChart, { index }));
 checks.push(['IndexChart 추세선 렌더', /<path d="M[\d.]+/.test(idx), 'ok']);
 checks.push(['IndexChart 월별 점 렌더', (idx.match(/<circle /g) ?? []).length >= 24, `${(idx.match(/<circle /g) ?? []).length}개`]);

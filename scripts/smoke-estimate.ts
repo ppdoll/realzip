@@ -6,7 +6,6 @@
  * 진짜 가격 궤적을 알고 있는 가상의 시군구를 만들고,
  * 가격지수와 예상 실거래가가 그 진짜 값을 되찾아내는지 확인한다.
  */
-import { compareListings, parseListings } from '../src/lib/compare';
 import { buildRegionIndex, estimate } from '../src/lib/estimate';
 import { recentMonths } from '../src/lib/months';
 import { PYEONG } from '../src/lib/stats';
@@ -172,74 +171,5 @@ if (sparseEst.confidence === 'high') fail('표본 2건인데 신뢰도가 높음
 const widerBand =
   (sparseEst.high - sparseEst.low) / sparseEst.price > (est.high - est.low) / est.price;
 if (!widerBand) fail('표본이 적은데 예측구간이 넓어지지 않았습니다.');
-
-// ── 4. 매물 호가 대조 ──
-const eok = (v: number) => Math.round((v / 10000) * 10) / 10;
-const askLines = [
-  `${eok(truePrice * 0.9)}억 12층`, // 확실히 구간 아래
-  `${eok(truePrice)}억 12층`, // 추정치 근처
-  `${eok(truePrice * 1.25)}억 12층`, // 확실히 구간 위
-].join('\n');
-
-const cmp = compareListings({
-  regionTrades: trades,
-  complexTrades,
-  index,
-  defaultArea: TARGET_AREA,
-  listings: parseListings(askLines),
-});
-
-console.log(`\n매물 호가 대조 (${cmp.items.length}건, 읽지 못한 줄 ${cmp.invalid.length}개)`);
-for (const it of cmp.items) {
-  console.log(
-    `  ${it.price.toLocaleString('ko-KR')}만원 → 추정 ${it.estimated.toLocaleString('ko-KR')} · ` +
-      `차이 ${it.gapPct >= 0 ? '+' : ''}${it.gapPct}% · ${it.position} · 백분위 ${it.percentile}%`,
-  );
-}
-
-if (cmp.items.length !== 3) fail(`호가 3건을 읽어야 하는데 ${cmp.items.length}건입니다.`);
-if (cmp.invalid.length !== 0) fail('정상 호가인데 읽지 못한 줄이 있습니다.');
-if (cmp.items[0].position !== 'below') fail('추정가 -10% 호가가 below 로 분류되지 않았습니다.');
-if (cmp.items[1].position !== 'inside') fail('추정가 수준 호가가 inside 로 분류되지 않았습니다.');
-if (cmp.items[2].position !== 'above') fail('추정가 +25% 호가가 above 로 분류되지 않았습니다.');
-if (
-  !(cmp.items[0].percentile < cmp.items[1].percentile &&
-    cmp.items[1].percentile < cmp.items[2].percentile)
-) {
-  fail('백분위가 호가 순서대로 증가하지 않았습니다.');
-}
-if (!cmp.summary) fail('요약이 비어 있습니다.');
-if (cmp.summary.belowCount !== 1 || cmp.summary.insideCount !== 1 || cmp.summary.aboveCount !== 1) {
-  fail('요약의 위치별 집계가 맞지 않습니다.');
-}
-
-// 층이 저/중/고 로만 적힌 매물은 실제 거래된 층 분포로 환산되어야 한다
-const hinted = compareListings({
-  regionTrades: trades,
-  complexTrades,
-  index,
-  defaultArea: TARGET_AREA,
-  listings: parseListings(`${eok(truePrice)}억 고층`),
-});
-if (hinted.items.length !== 1) fail('층 힌트 매물을 읽지 못했습니다.');
-if (!hinted.items[0].floorAssumed || hinted.items[0].floor == null) {
-  fail('고층 힌트가 실제 층수로 환산되지 않았습니다.');
-}
-console.log(
-  `  층 힌트: 고층 → ${hinted.items[0].floor}층으로 환산 (추정 ${hinted.items[0].estimated.toLocaleString('ko-KR')}만원)`,
-);
-
-// 시세와 동떨어진 금액은 결과가 아니라 입력 오류로 돌려야 한다
-const broken = compareListings({
-  regionTrades: trades,
-  complexTrades,
-  index,
-  defaultArea: TARGET_AREA,
-  listings: parseListings('5000 12층'),
-});
-if (broken.items.length !== 0 || broken.invalid.length !== 1) {
-  fail('잘못 읽은 금액(5,000만원)이 정상 결과로 통과했습니다.');
-}
-console.log(`  오파싱 가드: ${broken.invalid[0].error}`);
 
 console.log('\n✓ 모든 검증 통과');

@@ -4,7 +4,6 @@ import { useMemo, useState } from 'react';
 import type { Estimate, IndexPoint, Trade } from '@/lib/types';
 import { krw, krwShort, shortDate } from '@/lib/format';
 import { monthDiff, ymLabel } from '@/lib/months';
-import { median } from '@/lib/stats';
 import { niceTicks, useElementWidth } from './useElementWidth';
 
 const M = { top: 18, right: 16, bottom: 28, left: 56 };
@@ -16,12 +15,6 @@ type Props = {
   trades: Trade[];
   index: IndexPoint[];
   estimate: Estimate;
-  /**
-   * 사용자가 입력한 매물 호가 (만원). 시간축에 얹으면 "현재 호가"가 마치 미래
-   * 시점 값처럼 보이므로, 가로 기준선으로만 깔아서 "호가가 과거 어느 시점
-   * 가격 수준인지"를 읽게 한다.
-   */
-  listings?: number[];
 };
 
 type Point = { t: number; y: number; trade: Trade };
@@ -30,7 +23,7 @@ function daysInMonth(ym: string): number {
   return new Date(Number(ym.slice(0, 4)), Number(ym.slice(4, 6)), 0).getDate();
 }
 
-export default function PriceChart({ trades, index, estimate, listings = [] }: Props) {
+export default function PriceChart({ trades, index, estimate }: Props) {
   const [ref, width] = useElementWidth<HTMLDivElement>();
   const [hover, setHover] = useState<{ x: number; y: number; point?: Point; t: number } | null>(
     null,
@@ -69,21 +62,11 @@ export default function PriceChart({ trades, index, estimate, listings = [] }: P
       return { t: f.t, lo: f.y - halfLow * widen, hi: f.y + halfHigh * widen };
     });
 
-    const ask =
-      listings.length > 0
-        ? {
-            min: Math.min(...listings),
-            med: median(listings),
-            max: Math.max(...listings),
-          }
-        : null;
-
     const ys = [
       ...points.map((p) => p.y),
       ...fitted.map((f) => f.y),
       ...band.map((b) => b.lo),
       ...band.map((b) => b.hi),
-      ...(ask ? [ask.min, ask.max] : []),
     ].filter((v) => Number.isFinite(v) && v > 0);
 
     if (ys.length === 0) return null;
@@ -99,11 +82,10 @@ export default function PriceChart({ trades, index, estimate, listings = [] }: P
       fitted,
       forecast,
       band,
-      ask,
       yLo: Math.max(0, yMin - pad),
       yHi: yMax + pad,
     };
-  }, [trades, index, estimate, listings]);
+  }, [trades, index, estimate]);
 
   if (!model) {
     return (
@@ -184,12 +166,6 @@ export default function PriceChart({ trades, index, estimate, listings = [] }: P
           <span className="key-band" style={{ background: 'var(--series-2-wash)' }} />
           예상 구간 (80%) · 3개월 전망
         </li>
-        {listings.length > 0 && (
-          <li>
-            <span className="key-line" style={{ background: 'var(--series-3)' }} />
-            매물 호가 {listings.length}건 (중위선·범위)
-          </li>
-        )}
       </ul>
 
       <div className="chart-wrap" ref={ref}>
@@ -241,38 +217,6 @@ export default function PriceChart({ trades, index, estimate, listings = [] }: P
               {ymLabel(ym)}
             </text>
           ))}
-
-          {/* 매물 호가 범위 — 가로 띠 + 중위선 (시간축과 무관한 현재 값) */}
-          {model.ask && (
-            <g>
-              {model.ask.max > model.ask.min && (
-                <rect
-                  x={M.left}
-                  y={yOf(model.ask.max)}
-                  width={innerW}
-                  height={Math.max(1, yOf(model.ask.min) - yOf(model.ask.max))}
-                  fill="var(--series-3-wash)"
-                />
-              )}
-              <line
-                x1={M.left}
-                x2={M.left + innerW}
-                y1={yOf(model.ask.med)}
-                y2={yOf(model.ask.med)}
-                stroke="var(--series-3)"
-                strokeWidth={2}
-              />
-              <text
-                x={M.left + 6}
-                y={yOf(model.ask.med) - 6}
-                fontSize={11.5}
-                fontWeight={620}
-                fill="var(--text-primary)"
-              >
-                호가 중위 {krwShort(model.ask.med)}
-              </text>
-            </g>
-          )}
 
           {/* 예측 구간 밴드 */}
           <path d={bandPath} fill="var(--series-2-wash)" />

@@ -12,8 +12,7 @@
     "probe": "tsx scripts/probe-api.ts",
     "smoke": "tsx scripts/smoke-estimate.ts",
     "render:check": "tsx scripts/render-check.tsx",
-    "check": "tsc --noEmit && tsx scripts/smoke-estimate.ts && tsx scripts/listing-parse-check.ts && tsx scripts/render-check.tsx",
-    "parse:check": "tsx scripts/listing-parse-check.ts",
+    "check": "tsc --noEmit && tsx scripts/smoke-estimate.ts && tsx scripts/render-check.tsx",
     "db:setup": "tsx scripts/db-setup.ts",
     "db:check": "tsx scripts/db-check.ts"
   },
