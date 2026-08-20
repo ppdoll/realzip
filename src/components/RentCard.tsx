@@ -164,6 +164,15 @@ export default function RentCard({ data, loading, error, salePrice }: Props) {
               <div className="foot">전세 / 월세</div>
             </div>
             <div className="tile">
+              <div className="label">신규 계약 중위</div>
+              <div className="value tabular">
+                {s?.recentNewMedian != null ? krwShort(s.recentNewMedian) : '—'}
+              </div>
+              <div className="foot">
+                {s?.recentNewCount ? `최근 1년 신규 ${s.recentNewCount}건` : '신규 계약 없음'}
+              </div>
+            </div>
+            <div className="tile">
               <div className="label">유효 표본</div>
               <div className="value tabular">{s?.jeonseSamples ?? 0}</div>
               <div className="foot">전세 추정 기준</div>
@@ -226,6 +235,12 @@ export default function RentCard({ data, loading, error, salePrice }: Props) {
             <li>
               보증금이 있는 월세(반전세)는 월세로 분류했습니다. 표에서 보증금/월세를 같이
               확인하세요.
+            </li>
+            <li>
+              전세 예측구간이 매매보다 넓은 것은 <b>실제 분산이 크기 때문</b>입니다. 같은
+              평형이라도 층·동·수리 상태에 따라 보증금이 크게 갈립니다 (신규 계약만 봐도
+              편차가 거의 같습니다). 모델을 거치지 않은 <b>신규 계약 중위값</b>을 같이
+              놓았으니 함께 보세요.
             </li>
             {data.meta.mode === 'memory' && (
               <li className="muted">메모리 캐시 모드 — Supabase 를 붙이면 빨라집니다.</li>

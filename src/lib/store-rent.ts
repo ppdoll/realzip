@@ -156,46 +156,93 @@ async function replaceMonths(lawdCd: string, results: RentMonthResult[]): Promis
   }
 }
 
-async function selectRents(lawdCd: string, from: string, to: string): Promise<Rent[]> {
+/**
+ * 전월세 행 조회.
+ *
+ * 시군구 전월세는 매매보다 5배 가까이 많다(강남구 3년 69,026행). 전에는 임의 상한에서
+ * 멈췄는데, 오름차순 정렬이라 **가장 최근 데이터가 잘려나갔다** — 조용한 데이터 손실이
+ * 가장 나쁜 종류의 버그다. 이제
+ *  · 짧은 페이지가 올 때까지 끝까지 읽고
+ *  · 그래도 안전 상한에 닿으면 예외를 던져 알린다 (조용히 자르지 않는다)
+ *  · 필요한 만큼만 서버에서 걸러 받는다 (단지 지정 / 전세만 / 컬럼 축소)
+ */
+const SELECT_PAGE = 1000;
+const SELECT_HARD_LIMIT = 400_000;
+
+const RENT_COLUMNS =
+  'lawd_cd, umd_nm, apt_nm, jibun, build_year, area, floor, deal_date, deal_ym, ' +
+  'deposit, monthly_rent, contract_term, contract_type, pre_deposit, pre_monthly_rent, use_rr_right';
+
+/** 지수 산출에는 이 컬럼만 있으면 된다 — 69,000행을 통째로 끌어오지 않기 위함 */
+const INDEX_COLUMNS = 'lawd_cd, umd_nm, apt_nm, jibun, area, floor, deal_date, deal_ym, deposit, monthly_rent';
+
+function rowToRent(r: Record<string, unknown>): Rent {
+  return {
+    lawdCd: String(r.lawd_cd),
+    umdNm: r.umd_nm == null ? '' : String(r.umd_nm),
+    aptNm: String(r.apt_nm),
+    jibun: r.jibun == null ? null : String(r.jibun),
+    buildYear: r.build_year == null ? null : Number(r.build_year),
+    area: Number(r.area),
+    floor: r.floor == null ? null : Number(r.floor),
+    dealDate: String(r.deal_date),
+    dealYm: String(r.deal_ym),
+    deposit: Number(r.deposit),
+    monthlyRent: Number(r.monthly_rent ?? 0),
+    contractTerm: r.contract_term == null ? null : String(r.contract_term),
+    contractType: r.contract_type == null ? null : String(r.contract_type),
+    preDeposit: r.pre_deposit == null ? null : Number(r.pre_deposit),
+    preMonthlyRent: r.pre_monthly_rent == null ? null : Number(r.pre_monthly_rent),
+    useRRRight: r.use_rr_right == null ? null : String(r.use_rr_right),
+  };
+}
+
+export type RentQuery = {
+  /** 전세(월세 0)만 — 지수·추정에 쓸 때 */
+  jeonseOnly?: boolean;
+  /** 특정 단지만 (법정동 + 단지명) */
+  umdNm?: string;
+  aptNm?: string;
+  /** 지수용 축소 컬럼만 읽기 */
+  slim?: boolean;
+};
+
+async function selectRents(
+  lawdCd: string,
+  from: string,
+  to: string,
+  q: RentQuery = {},
+): Promise<Rent[]> {
   const db = serverClient();
   const out: Rent[] = [];
-  const PAGE = 1000;
 
-  for (let offset = 0; offset < 60_000; offset += PAGE) {
-    const { data, error } = await db
+  for (let offset = 0; offset < SELECT_HARD_LIMIT; offset += SELECT_PAGE) {
+    let query = db
       .from('apt_rent')
-      .select('*')
+      .select(q.slim ? INDEX_COLUMNS : RENT_COLUMNS)
       .eq('lawd_cd', lawdCd)
       .gte('deal_ym', from)
-      .lte('deal_ym', to)
-      .order('deal_date', { ascending: true })
-      .range(offset, offset + PAGE - 1);
-    if (error) throw wrapDbError('apt_rent 조회 실패', error.message);
-    if (!data || data.length === 0) break;
+      .lte('deal_ym', to);
 
-    for (const r of data as Record<string, unknown>[]) {
-      out.push({
-        lawdCd: String(r.lawd_cd),
-        umdNm: r.umd_nm == null ? '' : String(r.umd_nm),
-        aptNm: String(r.apt_nm),
-        jibun: r.jibun == null ? null : String(r.jibun),
-        buildYear: r.build_year == null ? null : Number(r.build_year),
-        area: Number(r.area),
-        floor: r.floor == null ? null : Number(r.floor),
-        dealDate: String(r.deal_date),
-        dealYm: String(r.deal_ym),
-        deposit: Number(r.deposit),
-        monthlyRent: Number(r.monthly_rent ?? 0),
-        contractTerm: r.contract_term == null ? null : String(r.contract_term),
-        contractType: r.contract_type == null ? null : String(r.contract_type),
-        preDeposit: r.pre_deposit == null ? null : Number(r.pre_deposit),
-        preMonthlyRent: r.pre_monthly_rent == null ? null : Number(r.pre_monthly_rent),
-        useRRRight: r.use_rr_right == null ? null : String(r.use_rr_right),
-      });
-    }
-    if (data.length < PAGE) break;
+    if (q.jeonseOnly) query = query.eq('monthly_rent', 0);
+    if (q.umdNm) query = query.eq('umd_nm', q.umdNm);
+    if (q.aptNm) query = query.eq('apt_nm', q.aptNm);
+
+    // 혹시라도 상한에 닿아 잘릴 경우 최신 데이터가 남도록 내림차순으로 읽는다.
+    const { data, error } = await query
+      .order('deal_date', { ascending: false })
+      .range(offset, offset + SELECT_PAGE - 1);
+    if (error) throw wrapDbError('apt_rent 조회 실패', error.message);
+    if (!data || data.length === 0) return out;
+
+    for (const r of data as unknown as Record<string, unknown>[]) out.push(rowToRent(r));
+    if (data.length < SELECT_PAGE) return out;
   }
-  return out;
+
+  throw new Error(
+    `apt_rent 조회가 안전 상한(${SELECT_HARD_LIMIT.toLocaleString('ko-KR')}행)에 닿았습니다. ` +
+      '조건을 좁히거나 상한을 올려야 합니다 — 조용히 자르면 최근 데이터가 사라집니다.',
+  );
 }
 
 // ── 공용 API ────────────────────────────────────────────────────────────
@@ -216,7 +263,13 @@ export async function getRegionRents(
   lawdCd: string,
   from: string,
   to: string,
-  opts: { onlyCached?: boolean; concurrency?: number; force?: boolean } = {},
+  opts: {
+    onlyCached?: boolean;
+    concurrency?: number;
+    force?: boolean;
+    /** 반환할 행을 좁힌다. 수집(적재)은 항상 시군구 전체로 하고, 읽기만 걸러진다. */
+    query?: RentQuery;
+  } = {},
 ): Promise<RegionRentData> {
   const yms = monthRange(from, to);
   const mode = storeMode();
@@ -248,8 +301,18 @@ export async function getRegionRents(
         }
       }
     }
-    const rents = yms.flatMap((ym) => cached.get(ym) ?? []);
+    let rents = yms.flatMap((ym) => cached.get(ym) ?? []);
     assertUsable(rents, missing);
+    // 메모리 모드에서는 받아둔 것을 같은 조건으로 걸러 준다 (DB 모드와 결과를 맞춘다)
+    const q = opts.query;
+    if (q) {
+      rents = rents.filter(
+        (r) =>
+          (!q.jeonseOnly || r.monthlyRent === 0) &&
+          (!q.umdNm || r.umdNm === q.umdNm) &&
+          (!q.aptNm || r.aptNm === q.aptNm),
+      );
+    }
     return { rents, mode, fetchedMonths: missing.length, errors };
   }
 
@@ -262,7 +325,7 @@ export async function getRegionRents(
     await replaceMonths(lawdCd, results);
   }
 
-  const rents = await selectRents(lawdCd, from, to);
+  const rents = await selectRents(lawdCd, from, to, opts.query);
   assertUsable(rents, missing);
   return { rents, mode, fetchedMonths: opts.onlyCached ? 0 : missing.length, errors };
 }

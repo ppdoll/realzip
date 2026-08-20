@@ -1,4 +1,6 @@
 import { buildRegionIndex, estimate } from './estimate';
+import { addMonths } from './months';
+import { median } from './stats';
 import type { Rent, RentSummary, Trade } from './types';
 
 /**
@@ -16,6 +18,13 @@ import type { Rent, RentSummary, Trade } from './types';
  *
  *  **월세 계약은 전세 추정에 넣지 않는다.** 전월세전환율로 환산할 수는 있지만
  *  그 비율 자체가 시기·지역마다 달라서 오차를 키운다. 월세는 따로 집계만 한다.
+ *
+ *  **신규/갱신은 나누지 않는다.** 갱신 계약이 옛 시세를 물고 있을 것 같아 확인해 봤지만
+ *  (은마 84㎡ 최근 1년 217건) 사분위 폭이 신규 1.17배 · 갱신 1.18배로 사실상 같았고
+ *  중위값 차이도 4.7% 뿐이었다. 절반을 버릴 만한 이득이 없다.
+ *  전세 보증금의 큰 편차는 층·동·수리상태에서 오는 실제 분산이다 — 예측구간이 넓은 건
+ *  모델이 약해서가 아니라 데이터가 그렇게 생겼기 때문이고, 그래서 모델을 거치지 않은
+ *  `recentNewMedian`(최근 1년 신규 계약 중위값)을 나란히 보여준다.
  */
 
 /** 비교용 정규화 — 공백 제거 (단지명 표기가 데이터셋 간 미묘하게 다르다) */
@@ -105,6 +114,13 @@ export function summarizeRent(input: RentSummaryInput): RentSummary | null {
   const lastJeonseRow = byDateDesc(jeonse)[0];
   const lastMonthlyRow = byDateDesc(monthly)[0];
 
+  // 최근 1년 신규 전세의 중위 보증금 — 모델과 무관한 참고값
+  const cutoff = addMonths(to, -11);
+  const cutoffDate = `${cutoff.slice(0, 4)}-${cutoff.slice(4, 6)}-01`;
+  const recentNew = jeonse.filter(
+    (r) => r.dealDate >= cutoffDate && (r.contractType ?? '').includes('신규'),
+  );
+
   // 전세 지수는 시군구 전체 전세로 만들고, 추정은 이 단지 전세로 한다.
   const regionJeonse = jeonseAsTrades(regionRents);
   const complexJeonse = jeonseAsTrades(complexRents);
@@ -156,5 +172,7 @@ export function summarizeRent(input: RentSummaryInput): RentSummary | null {
       : null,
     jeonseCount: jeonse.length,
     monthlyCount: monthly.length,
+    recentNewMedian: recentNew.length > 0 ? Math.round(median(recentNew.map((r) => r.deposit))) : null,
+    recentNewCount: recentNew.length,
   };
 }

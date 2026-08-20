@@ -168,21 +168,33 @@ async function replaceMonths(lawdCd: string, results: MonthResult[]): Promise<vo
   }
 }
 
+/**
+ * 매매 행 조회.
+ *
+ * 전에는 임의 상한(60,000)에서 멈췄는데 오름차순이라 **최근 데이터가 먼저 잘렸다**.
+ * 전월세에서 실제로 이 문제가 터졌으므로(강남구 69,026행 → 최근 6개월 유실) 여기도
+ * 같은 방식으로 고쳐 둔다: 짧은 페이지가 올 때까지 읽고, 안전 상한에 닿으면 던진다.
+ */
+const SELECT_PAGE = 1000;
+const SELECT_HARD_LIMIT = 400_000;
+
 async function selectTrades(lawdCd: string, from: string, to: string): Promise<Trade[]> {
   const db = supabase();
   const out: Trade[] = [];
-  const PAGE = 1000;
-  for (let offset = 0; offset < 60_000; offset += PAGE) {
+
+  for (let offset = 0; offset < SELECT_HARD_LIMIT; offset += SELECT_PAGE) {
     const { data, error } = await db
       .from('apt_trade')
       .select('*')
       .eq('lawd_cd', lawdCd)
       .gte('deal_ym', from)
       .lte('deal_ym', to)
-      .order('deal_date', { ascending: true })
-      .range(offset, offset + PAGE - 1);
+      // 혹시 상한에 닿아도 최신이 남도록 내림차순으로 읽는다
+      .order('deal_date', { ascending: false })
+      .range(offset, offset + SELECT_PAGE - 1);
     if (error) throw new Error(`apt_trade 조회 실패: ${error.message}`);
-    if (!data || data.length === 0) break;
+    if (!data || data.length === 0) return out;
+
     for (const r of data as Record<string, any>[]) {
       out.push({
         aptSeq: r.apt_seq,
@@ -204,9 +216,13 @@ async function selectTrades(lawdCd: string, from: string, to: string): Promise<T
         rgstDate: r.rgst_date,
       });
     }
-    if (data.length < PAGE) break;
+    if (data.length < SELECT_PAGE) return out;
   }
-  return out;
+
+  throw new Error(
+    `apt_trade 조회가 안전 상한(${SELECT_HARD_LIMIT.toLocaleString('ko-KR')}행)에 닿았습니다. ` +
+      '조용히 자르면 최근 데이터가 사라지므로 상한을 올려야 합니다.',
+  );
 }
 
 // ── 공용 API ────────────────────────────────────────────────────────────

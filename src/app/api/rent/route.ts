@@ -70,8 +70,13 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: '면적 정보를 찾지 못했습니다.' }, { status: 404 });
     }
 
+    // 시군구 전월세는 매매보다 훨씬 많다(강남구 3년 69,026행). 전부 끌어오면 느리고
+    // 절단 위험도 커지므로 필요한 두 조각만 서버에서 걸러 받는다.
+    //   1) 이 단지의 전월세 전체 (전세·월세 모두 — 표와 최근 계약 표시용)
+    //   2) 지수 산출용 시군구 전세만, 축소 컬럼으로
     const rentData = await getRegionRents(lawdCd, from, to, {
       concurrency: FETCH_CONCURRENCY,
+      query: { umdNm: head.umdNm, aptNm: head.aptNm },
     });
     const complexRents = filterComplexRents(rentData.rents, {
       umdNm: head.umdNm,
@@ -79,8 +84,13 @@ export async function GET(req: Request) {
       jibun: head.jibun,
     });
 
+    const regionJeonse = await getRegionRents(lawdCd, from, to, {
+      onlyCached: true, // 위에서 이미 수집했다
+      query: { jeonseOnly: true, slim: true },
+    });
+
     const summary = summarizeRent({
-      regionRents: rentData.rents,
+      regionRents: regionJeonse.rents,
       complexRents,
       from,
       to,

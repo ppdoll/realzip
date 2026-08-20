@@ -158,4 +158,11 @@ export type RentSummary = {
   /** 최근 3년 전세 건수 / 월세 건수 */
   jeonseCount: number;
   monthlyCount: number;
+  /**
+   * 최근 1년 **신규** 전세 계약의 중위 보증금 (만원).
+   * 모델을 거치지 않은 견고한 참고값 — 예측구간이 넓을 때 눈으로 확인할 기준이 된다.
+   */
+  recentNewMedian: number | null;
+  /** 그 중위값의 표본 수 */
+  recentNewCount: number;
 };
