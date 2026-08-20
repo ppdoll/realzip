@@ -101,7 +101,7 @@ export default function RentCard({ data, loading, error, salePrice }: Props) {
 
       {!hasAny ? (
         <div className="callout">
-          이 평형의 최근 3년 전월세 신고가 없습니다.
+          이 평형의 최근 1년 전월세 신고가 없습니다.
           {data.complexRentCount > 0
             ? ` (이 단지 전체로는 ${data.complexRentCount}건 있습니다 — 다른 평형을 골라보세요.)`
             : ''}
@@ -118,9 +118,12 @@ export default function RentCard({ data, loading, error, salePrice }: Props) {
                 </div>
               )}
             </div>
-            {s?.jeonseConfidence && (
-              <span className="badge">신뢰도 {CONFIDENCE_LABEL[s.jeonseConfidence]}</span>
-            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {s?.jeonseConfidence && (
+                <span className="badge">신뢰도 {CONFIDENCE_LABEL[s.jeonseConfidence]}</span>
+              )}
+              {s?.jeonseFromOtherAreas && <span className="badge">다른 평형에서 환산</span>}
+            </div>
           </div>
 
           <div className="tiles">
@@ -156,7 +159,7 @@ export default function RentCard({ data, loading, error, salePrice }: Props) {
               </div>
             </div>
             <div className="tile">
-              <div className="label">3년 신고 건수</div>
+              <div className="label">1년 신고 건수</div>
               <div className="value tabular">
                 {s?.jeonseCount ?? 0}
                 <span style={{ fontSize: 13, fontWeight: 500 }}> / {s?.monthlyCount ?? 0}</span>
@@ -191,7 +194,7 @@ export default function RentCard({ data, loading, error, salePrice }: Props) {
           {open && (
             <div className="table-scroll" style={{ marginTop: 12 }}>
               <table className="data">
-                <caption className="sr-only">최근 3년 전월세 신고 내역</caption>
+                <caption className="sr-only">최근 1년 전월세 신고 내역</caption>
                 <thead>
                   <tr>
                     <th scope="col">계약일</th>
@@ -228,6 +231,12 @@ export default function RentCard({ data, loading, error, salePrice }: Props) {
           )}
 
           <ul className="notes">
+            {s?.jeonseFromOtherAreas && (
+              <li>
+                <b>이 평형의 전세 신고가 최근 1년에 없습니다.</b> 위 추정값은 단지 내 다른
+                평형에서 면적 보정으로 환산한 것이라 훨씬 약합니다 — 참고만 하세요.
+              </li>
+            )}
             <li>
               전세가율은 <b>같은 평형의 전세 추정 ÷ 매매 추정</b>입니다. 두 추정 모두 오차가
               있으니 비율도 그만큼 흔들립니다.

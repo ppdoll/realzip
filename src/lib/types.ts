@@ -165,4 +165,10 @@ export type RentSummary = {
   recentNewMedian: number | null;
   /** 그 중위값의 표본 수 */
   recentNewCount: number;
+  /**
+   * 이 평형의 전세 신고가 0건인데 추정값이 나온 경우 true.
+   * 단지 내 다른 평형에서 면적 보정으로 환산한 값이라 훨씬 약하다 —
+   * "전세 0건"과 추정값이 나란히 보이면 모순처럼 읽히므로 명시한다.
+   */
+  jeonseFromOtherAreas: boolean;
 };

@@ -174,5 +174,6 @@ export function summarizeRent(input: RentSummaryInput): RentSummary | null {
     monthlyCount: monthly.length,
     recentNewMedian: recentNew.length > 0 ? Math.round(median(recentNew.map((r) => r.deposit))) : null,
     recentNewCount: recentNew.length,
+    jeonseFromOtherAreas: jeonsePrice != null && jeonse.length === 0,
   };
 }

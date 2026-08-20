@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { REGION_BY_CODE, regionLabel } from '@/data/regions';
-import { FETCH_CONCURRENCY, WINDOW_MONTHS } from '@/lib/config';
+import { FETCH_CONCURRENCY, RENT_WINDOW_MONTHS, WINDOW_MONTHS } from '@/lib/config';
 import { areaOptions } from '@/lib/estimate';
 import { recentMonths } from '@/lib/months';
 import { filterComplexRents, summarizeRent } from '@/lib/rent';
@@ -23,7 +23,8 @@ const Query = z.object({
 /**
  * GET /api/rent?lawdCd=11680&aptSeq=11680-218&area=84.43&salePrice=352120
  *
- * 단지 1곳의 최근 3년 전월세 내역 + 전세 추정 보증금 + 전세가율을 반환한다.
+ * 단지 1곳의 **최근 1년** 전월세 내역 + 전세 추정 보증금 + 전세가율을 반환한다.
+ * (매매는 3년, 전월세는 1년 — 전월세 신고량이 5배 가까이 많아 저장 비용이 크다.)
  * 화면에서 매매와 **병렬로** 호출하도록 별도 엔드포인트로 두었다 —
  * 전월세를 매매 응답에 합치면 단지 조회가 통째로 느려진다.
  *
@@ -47,14 +48,17 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: '지원하지 않는 시군구 코드입니다.' }, { status: 400 });
   }
 
-  const months = recentMonths(WINDOW_MONTHS);
-  const from = months[0];
-  const to = months[months.length - 1];
+  // 매매는 3년, 전월세는 1년 창을 쓴다 (config 의 두 상수)
+  const saleMonths = recentMonths(WINDOW_MONTHS);
+  const saleFrom = saleMonths[0];
+  const rentMonths = recentMonths(RENT_WINDOW_MONTHS);
+  const from = rentMonths[0];
+  const to = rentMonths[rentMonths.length - 1];
 
   try {
     // 단지 식별자(법정동·단지명·지번)는 매매 쪽에만 있으므로 먼저 거기서 얻는다.
     // 이미 적재된 지역이면 DB 조회라 값이 싸다.
-    const saleData = await getRegionTrades(lawdCd, from, to, {
+    const saleData = await getRegionTrades(lawdCd, saleFrom, to, {
       concurrency: FETCH_CONCURRENCY,
     });
     const complexTrades = filterComplex(saleData.trades, aptSeq);
@@ -102,7 +106,7 @@ export async function GET(req: Request) {
     return NextResponse.json({
       region: { code: lawdCd, label: regionLabel(lawdCd) },
       complex: { aptSeq, aptNm: head.aptNm, umdNm: head.umdNm, jibun: head.jibun },
-      window: { from, to },
+      window: { from, to, months: rentMonths.length },
       selectedArea: targetArea,
       summary,
       /** 선택 평형의 전월세 내역 (최신순) */

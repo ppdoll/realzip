@@ -3,7 +3,7 @@ import { regionLabel } from '@/data/regions';
 import { FETCH_CONCURRENCY } from '@/lib/config';
 import { recentMonths } from '@/lib/months';
 import { getRegionTrades, regionsByStaleness, storeMode } from '@/lib/store';
-import { getRegionRents } from '@/lib/store-rent';
+import { getRegionRents, pruneOldRents } from '@/lib/store-rent';
 
 export const dynamic = 'force-dynamic';
 
@@ -174,6 +174,17 @@ export async function GET(req: Request) {
     }
   }
 
+  // 전월세는 1년 창이라 매달 오래된 달이 밀려난다 — 갱신 뒤에 정리한다.
+  let pruned: { cutoff: string; trades: number; logs: number } | null = null;
+  let pruneError: string | null = null;
+  if (results.some((r) => r.rents != null)) {
+    try {
+      pruned = await pruneOldRents();
+    } catch (e) {
+      pruneError = e instanceof Error ? e.message : String(e);
+    }
+  }
+
   const done = new Set(results.map((r) => r.lawdCd));
   const remaining = queue.filter((q) => !done.has(q.lawdCd)).map((q) => q.lawdCd);
 
@@ -185,6 +196,9 @@ export async function GET(req: Request) {
     failed: results.filter((r) => r.error).length,
     /** 전월세가 미신청이면 그 사유 (이번 실행에서 전월세는 전부 건너뜀) */
     rentDisabledReason,
+    /** 전월세 1년 창을 벗어나 지운 행 (매달 굴러가므로 계속 정리해야 한다) */
+    pruned,
+    pruneError,
     remaining: remaining.length,
     /** 예산이 떨어져 멈췄는지 — true 면 남은 지역은 다음 실행에서 처리된다 */
     budgetHit,

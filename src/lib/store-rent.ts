@@ -1,5 +1,6 @@
+import { RENT_WINDOW_MONTHS } from './config';
 import { fetchRentMonths, type RentMonthResult } from './molit-rent';
-import { monthRange } from './months';
+import { monthRange, recentMonths } from './months';
 import { storeMode, ttlFor, type StoreMode } from './store';
 import { serverClient } from './supabase';
 import type { Rent } from './types';
@@ -328,4 +329,49 @@ export async function getRegionRents(
   const rents = await selectRents(lawdCd, from, to, opts.query);
   assertUsable(rents, missing);
   return { rents, mode, fetchedMonths: opts.onlyCached ? 0 : missing.length, errors };
+}
+
+
+/**
+ * 조회 창(최근 1년)을 벗어난 전월세를 지운다.
+ *
+ * 창이 매달 굴러가므로 정리하지 않으면 계속 쌓인다. 매매(3년)와 달리 전월세는
+ * 신고량이 5배라 저장 비용이 커서 1년만 유지한다 ([[RENT_WINDOW_MONTHS]]).
+ * 크론이 갱신 후에 불러 준다.
+ *
+ * @returns 지운 거래 행 수와 장부 행 수
+ */
+export async function pruneOldRents(
+  now = new Date(),
+): Promise<{ cutoff: string; trades: number; logs: number }> {
+  const months = recentMonths(RENT_WINDOW_MONTHS, now);
+  const cutoff = months[0];
+  const db = serverClient();
+
+  // 지운 개수를 알기 위해 먼저 센다 (전월세 표는 지역당 수천 행 수준이라 부담 없다)
+  const before = await db
+    .from('apt_rent')
+    .select('*', { count: 'exact', head: true })
+    .lt('deal_ym', cutoff);
+  if (before.error) throw wrapDbError('apt_rent 정리 대상 조회 실패', before.error.message);
+
+  const beforeLogs = await db
+    .from('rent_ingest_log')
+    .select('*', { count: 'exact', head: true })
+    .lt('deal_ym', cutoff);
+  if (beforeLogs.error) {
+    throw wrapDbError('rent_ingest_log 정리 대상 조회 실패', beforeLogs.error.message);
+  }
+
+  const trades = before.count ?? 0;
+  const logs = beforeLogs.count ?? 0;
+  if (trades === 0 && logs === 0) return { cutoff, trades: 0, logs: 0 };
+
+  const delTrades = await db.from('apt_rent').delete().lt('deal_ym', cutoff);
+  if (delTrades.error) throw wrapDbError('apt_rent 정리 실패', delTrades.error.message);
+
+  const delLogs = await db.from('rent_ingest_log').delete().lt('deal_ym', cutoff);
+  if (delLogs.error) throw wrapDbError('rent_ingest_log 정리 실패', delLogs.error.message);
+
+  return { cutoff, trades, logs };
 }
