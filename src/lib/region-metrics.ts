@@ -43,8 +43,18 @@ export type Distribution = {
   p75: number;
 };
 
+/**
+ * 분포를 만들 최소 표본은 **20곳**이다.
+ *
+ * 처음엔 5곳으로 뒀는데, 13곳에서 "하위 30%" 라고 적으면 그 근거가 단지 4곳이다.
+ * 그건 비교라기보다 우연이다. 감사에서 종로구 19곳 · 부천 오정구 19곳 · 과천시 13곳이
+ * 걸렸고, 이 구들은 비교를 아예 보여주지 않는 게 맞다 —
+ * 없는 근거로 순위를 적어 주는 것보다 값만 보여주는 게 낫다.
+ */
+const MIN_DISTRIBUTION = 20;
+
 function describe(values: number[]): Distribution | null {
-  if (values.length < 5) return null;
+  if (values.length < MIN_DISTRIBUTION) return null;
   return {
     count: values.length,
     median: round1(median(values)),
@@ -263,8 +273,19 @@ export async function regionJeonseRatios(lawdCd: string): Promise<JeonseRatioInf
   const best = new Map<string, { n: number; ratio: number }>();
   for (const [b, sales] of saleAmounts) {
     const deposits = depositAmounts.get(b);
-    // 양쪽 모두 2건 이상일 때만 — 1건짜리 비율은 잡음이다
-    if (!deposits || sales.length < 2 || deposits.length < 2) continue;
+    /**
+     * 양쪽 모두 3건 이상일 때만.
+     *
+     * 처음에는 2건으로 잡았는데 **2개의 중위값은 그냥 두 값의 평균**이라 잡음이
+     * 그대로 통과했다. 63개 구 감사에서 전세가율 100% 초과 37건이 잡혔고, 원자료를
+     * 보니 두 종류였다:
+     *   - 실제 (고덕코아루더블루시티 21㎡: 매매 116건 6,314만 / 전세 16건 1억 = 158%)
+     *     소형 도시형생활주택의 깡통전세는 실재한다 — 이건 지워선 안 된다.
+     *   - 잡음 (건양하늘터 85㎡: 매매 2건 6.15억·6.9억 / 전세 2건 = 104%)
+     *     한쪽 거래 하나가 중위를 끌고 간 것뿐이다.
+     * 3건으로 올리면 뒤쪽만 빠진다.
+     */
+    if (!deposits || sales.length < 3 || deposits.length < 3) continue;
     const saleMed = median(sales);
     if (!(saleMed > 0)) continue;
     const ratio = round1((median(deposits) / saleMed) * 100);

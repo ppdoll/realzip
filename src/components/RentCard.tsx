@@ -209,6 +209,14 @@ export default function RentCard({ data, loading, error, salePrice, regionLabel 
                 lowLabel="매매가가 전세보다 훨씬 높음"
                 highLabel="전세가 매매가에 가까움"
               />
+              {data.jeonseRatio.value > 100 && (
+                <div className="callout" style={{ marginTop: 12 }}>
+                  이 평형은 <b>전세 보증금 중위값이 매매 중위값보다 높습니다</b>{' '}
+                  ({data.jeonseRatio.value}%). 계산 오류가 아니라 실제로 그렇게 신고된
+                  것입니다 — 소형 평형에서 매매가가 내려가면 이런 상태가 됩니다.
+                  숨기지 않고 그대로 보여드립니다.
+                </div>
+              )}
             </div>
           )}
 

@@ -40,34 +40,68 @@ export default function DistBar({
   highLabel?: string;
 }) {
   const d = pos.distribution;
-  // 축 범위는 분포와 이 단지 값을 모두 담되 여유를 조금 둔다
-  const lo = Math.min(d.p25, pos.value);
-  const hi = Math.max(d.p75, pos.value);
-  const pad = Math.max((hi - lo) * 0.35, 0.4);
-  const min = Math.max(0, lo - pad);
-  const max = hi + pad;
+
+  /**
+   * 축은 **분포를 기준으로** 잡고, 이 단지 값이 그 밖이면 끌어다 붙이지 않는다.
+   *
+   * 값에 축을 맞추면 극단값 하나가 그림을 망친다. 실측: 강서구 더트루엘마곡HQ 는
+   * 2024년 준공 신축이라 회전율이 58.1% 인데(86건/148세대 — 입주장이라 정상이다),
+   * 강남구 p25 1.2 / p75 3.5 짜리 축에 그 값을 담으면 가운데 절반 띠가 폭 3% 로
+   * 짜부라져서 아무것도 안 보인다.
+   *
+   * 그래서 축을 사분위 범위의 1.5배까지만 두고, 벗어난 값은 끝에 삼각형으로 붙인다 —
+   * "이 방향으로 더 멀리 있다" 는 뜻이고, 정확한 값은 범례에 적혀 있다.
+   */
+  const iqr = Math.max(d.p75 - d.p25, 0.1);
+  const axisLo = Math.max(0, d.p25 - iqr * 1.5);
+  const axisHi = d.p75 + iqr * 1.5;
+  const offScale = pos.value < axisLo ? 'low' : pos.value > axisHi ? 'high' : null;
+
+  // 값이 축 안이면 여유를 조금 둬서 끝에 붙지 않게 한다
+  const min = offScale ? axisLo : Math.max(0, Math.min(axisLo, pos.value - iqr * 0.3));
+  const max = offScale ? axisHi : Math.max(axisHi, pos.value + iqr * 0.3);
   const span = Math.max(max - min, 0.001);
-  const at = (v: number) => ((v - min) / span) * 100;
+  const at = (v: number) => ((Math.min(Math.max(v, min), max) - min) / span) * 100;
 
   const bandLeft = at(d.p25);
   const bandRight = at(d.p75);
   const fmt = (v: number) => `${fmt1(v)}${unit}`;
+
+  const rank =
+    pos.percentile <= 10
+      ? '가장 낮은 편'
+      : pos.percentile >= 90
+        ? '가장 높은 편'
+        : `하위 ${pos.percentile}%`;
 
   return (
     <div className="distbar">
       <div
         className="distbar-track"
         role="img"
-        aria-label={`${regionLabel} 분포에서 이 단지는 ${fmt(pos.value)}로 하위 ${
-          pos.percentile
-        }%입니다. 구 가운데 절반은 ${fmt(d.p25)}~${fmt(d.p75)}, 중위는 ${fmt(d.median)}입니다.`}
+        aria-label={
+          `${regionLabel} 단지 ${d.count}곳 분포에서 이 단지는 ${fmt(pos.value)}로 ${rank}입니다. ` +
+          `가운데 절반은 ${fmt(d.p25)}~${fmt(d.p75)}, 중위는 ${fmt(d.median)}입니다.` +
+          (offScale
+            ? ` 이 단지 값은 그림에 표시된 범위(${fmt(min)}~${fmt(max)})를 벗어나 ${
+                offScale === 'high' ? '오른쪽' : '왼쪽'
+              } 끝에 표시했습니다.`
+            : '')
+        }
       >
         <span
           className="distbar-band"
           style={{ left: `${bandLeft}%`, width: `${Math.max(bandRight - bandLeft, 1)}%` }}
         />
         <span className="distbar-median" style={{ left: `${at(d.median)}%` }} />
-        <span className="distbar-dot" style={{ left: `${at(pos.value)}%` }} />
+        {offScale ? (
+          <span
+            className={`distbar-off ${offScale}`}
+            style={{ left: offScale === 'high' ? '100%' : '0%' }}
+          />
+        ) : (
+          <span className="distbar-dot" style={{ left: `${at(pos.value)}%` }} />
+        )}
       </div>
 
       <div className="distbar-ends">
@@ -77,7 +111,9 @@ export default function DistBar({
 
       <div className="distbar-legend">
         <span className="distbar-key">
-          <i className="k-dot" />이 단지 <b className="tabular">{fmt(pos.value)}</b>
+          {offScale ? <i className={`k-off ${offScale}`} /> : <i className="k-dot" />}이 단지{' '}
+          <b className="tabular">{fmt(pos.value)}</b>
+          {offScale ? <span className="muted">{' '}(그림 범위 밖)</span> : null}
         </span>
         <span className="distbar-key">
           <i className="k-median" />

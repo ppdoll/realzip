@@ -82,6 +82,64 @@ function nameMatches(kaptName: string, targetRaw: string): boolean {
 }
 
 /**
+ * 이름이 걸린 후보가 여럿일 때 하나를 고른다. 못 고르면 null — **찍지 않는다.**
+ *
+ * 예전에는 그냥 첫 번째를 집었는데, DB 가 준 순서에 답이 달려 있어서 틀린 값이
+ * 그럴듯하게 나왔다. 63개 구 감사에서 잡힌 실제 사례:
+ *   텐즈힐(1단지) 51건  → 왕십리텐즈힐1단지(임대) 333세대 를 집어 15.3%
+ *                        (실제 텐즈힐1단지 1,369세대 → 3.7%)
+ *   텐즈힐(2단지) 34건  → 왕십리텐즈힐2구역214동 211세대 를 집어 16.1%
+ *                        (실제 텐즈힐2구역 937세대 → 3.6%)
+ *   롯데캐슬 141건      → SH황학롯데캐슬베네치아 336세대 를 집어 42%
+ *                        (실제 롯데캐슬베네치아 1,534세대 → 9.2%)
+ *
+ * 순서대로 걸러서 하나만 남으면 그것, 끝까지 여럿이면 포기한다.
+ *   1. 이름이 정확히 같은 것
+ *   2. 임대 등록이 아닌 것 — 매매 거래는 분양 세대에서 일어난다.
+ *      K-apt 는 한 단지를 임대/분양으로 나눠 같은 지번에 올려 둔다
+ *      (신당남산타운임대 2,034 / 신당남산타운(분양) 3,118).
+ *   3. 단지 번호가 정확히 같은 것 (부분집합보다 우선) — 214동 같은 군더더기를 밀어낸다.
+ *      **거래명에 숫자가 있을 때만 쓴다.** 숫자 없는 거래명("수서")에까지 적용하면
+ *      "숫자 없는 후보"를 우대하게 되는데, 그건 근거가 없다 —
+ *      수서아파트(720)와 수서1-1단지아파트(2,214) 중 어느 쪽인지는 알 수 없으니 포기해야 한다.
+ *   4. 이름 길이가 거래명에 확실히 더 가까운 것 — SH·지역명 같은 접두어가 붙은
+ *      등록 변형을 밀어낸다. **2자 이상 차이가 날 때만.** 밀어내려는 접두어는
+ *      "sh황학"·"왕십리" 처럼 2자 이상이라서, 1자 차이는 근거가 아니라 잡음이다.
+ *      실제로 수서아파트(720, 8자) vs 수서1-1단지아파트(2,214, 9자) 를 1자 차이로
+ *      갈라 720 을 집고 있었다 — 어느 쪽인지 알 수 없으니 포기해야 하는 경우다.
+ */
+function pickBest<T extends KaptCandidate>(candidates: T[], targetRaw: string): T | null {
+  if (candidates.length <= 1) return candidates[0] ?? null;
+  const t = normName(targetRaw);
+  const td = digitsOf(targetRaw);
+  const sameDigits = (n: string) => {
+    const d = digitsOf(n);
+    return d.length === td.length && d.every((x) => td.includes(x));
+  };
+
+  const narrow = (list: T[], keep: (c: T) => boolean): T[] => {
+    const kept = list.filter(keep);
+    return kept.length > 0 && kept.length < list.length ? kept : list;
+  };
+
+  let pool = candidates;
+  pool = narrow(pool, (c) => normName(c.kaptName) === t);
+  if (pool.length === 1) return pool[0];
+  pool = narrow(pool, (c) => !/임대/.test(c.kaptName));
+  if (pool.length === 1) return pool[0];
+  if (td.length > 0) {
+    pool = narrow(pool, (c) => sameDigits(c.kaptName));
+    if (pool.length === 1) return pool[0];
+  }
+
+  // 이름 길이가 확실히(2자 이상) 더 가까운 것 하나만 남을 때 채택한다
+  const dist = (c: T) => Math.abs(normName(c.kaptName).length - t.length);
+  const sorted = [...pool].sort((a, b) => dist(a) - dist(b));
+  const margin = pool.length > 1 ? dist(sorted[1]) - dist(sorted[0]) : Infinity;
+  return margin >= 2 ? sorted[0] : null;
+}
+
+/**
  * 후보 목록에서 이 거래 단지에 해당하는 것을 고른다. 확신이 없으면 null.
  *
  * 후보는 **같은 시군구** 로 이미 좁혀져 있다고 본다 (법정동까지 좁혀 넘기면 더 좋다).
@@ -104,14 +162,17 @@ export function matchKapt<T extends KaptCandidate>(candidates: T[], target: Trad
       return numbersConflict(sameJibun[0].kaptName, name) ? null : sameJibun[0];
     }
     if (sameJibun.length > 1) {
-      const hit = sameJibun.find((c) => nameMatches(c.kaptName, name));
-      if (hit) return hit;
-      return null; // 같은 지번에 여러 단지인데 이름으로도 못 가리면 포기
+      return pickBest(
+        sameJibun.filter((c) => nameMatches(c.kaptName, name)),
+        name,
+      );
     }
   }
 
-  const byName = inDong.filter((c) => nameMatches(c.kaptName, name));
-  return byName.length === 1 ? byName[0] : null;
+  return pickBest(
+    inDong.filter((c) => nameMatches(c.kaptName, name)),
+    name,
+  );
 }
 
 /**

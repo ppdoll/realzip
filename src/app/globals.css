@@ -866,6 +866,26 @@ table.data tr.canceled td {
   /* 표면색 링 — 띠 위에 올라가도 점이 구분된다 */
   box-shadow: 0 0 0 2px var(--surface-1);
 }
+/* 축 밖으로 벗어난 값 — 점 대신 그 방향을 가리키는 삼각형으로 붙인다.
+   점을 끝에 그대로 찍으면 "여기 있다" 로 읽히는데, 실제로는 더 멀리 있다. */
+.distbar-off {
+  position: absolute;
+  top: 50%;
+  width: 0;
+  height: 0;
+  margin-top: -6px;
+  border-top: 6px solid transparent;
+  border-bottom: 6px solid transparent;
+}
+.distbar-off.high {
+  margin-left: -8px;
+  border-left: 9px solid var(--series-1);
+}
+.distbar-off.low {
+  margin-left: -1px;
+  border-right: 9px solid var(--series-1);
+}
+
 .distbar-ends {
   display: flex;
   justify-content: space-between;
@@ -907,6 +927,22 @@ table.data tr.canceled td {
   display: inline-block;
   flex: none;
 }
+.distbar-key .k-off {
+  width: 0;
+  height: 0;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+}
+.distbar-key .k-off.high {
+  border-left: 8px solid var(--series-1);
+}
+.distbar-key .k-off.low {
+  border-right: 8px solid var(--series-1);
+}
+.distbar-legend .muted {
+  color: var(--text-muted);
+}
+
 .distbar-key .k-dot {
   width: 9px;
   height: 9px;

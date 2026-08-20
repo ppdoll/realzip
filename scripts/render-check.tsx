@@ -94,6 +94,8 @@ const DIST_CASES: [string, number][] = [
   ['중위', 2],
   ['분포 위', 12.4],
   ['0', 0],
+  // 실측 극단값 — 강서구 더트루엘마곡HQ (2024 준공 신축, 86건/148세대)
+  ['신축 입주장', 58.1],
 ];
 for (const [name, value] of DIST_CASES) {
   const html = renderToStaticMarkup(
@@ -106,12 +108,37 @@ for (const [name, value] of DIST_CASES) {
   const widths = [...html.matchAll(/width:\s*([\d.]+)%/g)].map((m) => Number(m[1]));
   const inBounds =
     lefts.length === 3 && lefts.every((v) => v >= 0 && v <= 100) && widths.every((w) => w > 0);
+  // 가운데 절반 띠는 극단값이 있어도 읽을 수 있는 폭이어야 한다 (축을 값에 맞추면 짜부라진다)
+  const bandWidth = widths[0] ?? 0;
   checks.push([
     `DistBar 표시가 띠 안에 (${name} ${value}%)`,
     inBounds && !/(NaN|Infinity|undefined)/.test(html),
     lefts.map((v) => v.toFixed(1)).join(' / '),
   ]);
+  checks.push([
+    `DistBar 가운데 절반 띠 폭 15% 이상 (${name} ${value}%)`,
+    bandWidth >= 15,
+    `${bandWidth.toFixed(1)}%`,
+  ]);
 }
+// 범위를 벗어난 값은 점이 아니라 방향 삼각형으로 붙어야 한다 —
+// 끝에 점을 찍으면 "여기 있다" 로 읽히는데 실제로는 더 멀리 있다.
+const offHtml = renderToStaticMarkup(
+  React.createElement(DistBar, {
+    pos: { value: 58.1, distribution: DIST, percentile: 99, vsMedian: 29 },
+    regionLabel: '강서구',
+  }),
+);
+checks.push(['DistBar 범위 밖은 삼각형', /distbar-off high/.test(offHtml) && !/distbar-dot/.test(offHtml), 'ok']);
+checks.push(['DistBar 범위 밖 표기', /범위 밖/.test(offHtml), 'ok']);
+const inHtml = renderToStaticMarkup(
+  React.createElement(DistBar, {
+    pos: { value: 2.5, distribution: DIST, percentile: 60, vsMedian: 1.3 },
+    regionLabel: '강남구',
+  }),
+);
+checks.push(['DistBar 범위 안은 점', /distbar-dot/.test(inHtml) && !/distbar-off/.test(inHtml), 'ok']);
+
 // 범례는 색 말고 모양도 쓰므로 세 표시가 모두 있어야 한다
 const distHtml = renderToStaticMarkup(
   React.createElement(DistBar, {

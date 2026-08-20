@@ -84,6 +84,12 @@ export default function FactsCard({ data, loading, error, regionLabel }: Props) 
   const f = data.facts;
   const region = regionLabel ?? '같은 구';
 
+  // 준공 3년 이내면 입주장 때문에 회전율이 높게 나온다 — 값이 아니라 해석을 보태야 한다
+  const approvedYear = f.approvedAt ? Number(f.approvedAt.slice(0, 4)) : null;
+  const yearsOld =
+    approvedYear && approvedYear > 1900 ? new Date().getFullYear() - approvedYear : null;
+  const isNew = yearsOld != null && yearsOld <= 3;
+
   return (
     <div className="card">
       <h2 className="card-title">
@@ -187,6 +193,14 @@ export default function FactsCard({ data, loading, error, regionLabel }: Props) 
       </div>
 
       <ul className="notes">
+        {isNew && (
+          <li>
+            <b>이 단지는 준공 {yearsOld != null ? `${yearsOld}년차` : '신축'}입니다.</b> 준공
+            직후에는 입주·분양권 전매 거래가 몰려서 회전율이 원래 높게 나옵니다 — 손바뀜이
+            활발한 동네라는 뜻이 아니라 <b>새 아파트라서</b> 그렇습니다. 실측으로 2024년
+            준공 단지가 148세대에 1년 86건(58%)까지 나옵니다.
+          </li>
+        )}
         <li>
           <b>거래 회전율</b>은 최근 1년 매매 건수를 세대수로 나눈 값입니다. 낮으면 매물이
           잠긴 단지(재건축 대기 등), 높으면 손바뀜이 빠른 단지입니다.
