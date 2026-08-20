@@ -103,6 +103,17 @@ create table if not exists apt_kapt (
   builder      text,               -- 시공사
   top_floor    int,
   elevator_cnt int,
+  -- 건물 종류 (아파트 / 주상복합 / 연립주택 …). 회전율이 유난히 높은 단지를 보면
+  -- 주상복합이 섞여 있어서, 값 자체보다 "왜 그런지" 를 설명하는 데 쓴다.
+  apt_kind     text,
+  -- 세대 규모 구성 (전용면적 기준 세대수). 청약·세금이 쓰는 60·85·135㎡ 구간이다.
+  -- 방 수가 공공데이터에 없어서 단지 성격을 보여줄 대안으로 담는다 —
+  -- "2,100세대 전부 60㎡ 이하" 는 원룸형·소형 단지라는 뜻이고,
+  -- 전세가율 100% 넘는 이상치들이 대개 여기에 몰려 있다.
+  units_60     int,
+  units_85     int,
+  units_135    int,
+  units_over   int,
   updated_at   timestamptz not null default now()
 );
 
@@ -115,6 +126,13 @@ create table if not exists kapt_ingest_log (
   complexes  int  not null default 0,
   fetched_at timestamptz not null default now()
 );
+
+-- 이미 만들어 둔 apt_kapt 에 컬럼을 붙인다 (create table if not exists 는 컬럼을 추가하지 않는다)
+alter table apt_kapt add column if not exists apt_kind  text;
+alter table apt_kapt add column if not exists units_60  int;
+alter table apt_kapt add column if not exists units_85  int;
+alter table apt_kapt add column if not exists units_135 int;
+alter table apt_kapt add column if not exists units_over int;
 
 -- 서버(service_role)에서만 접근하므로 RLS 를 켜고 정책은 두지 않는다.
 alter table apt_trade       enable row level security;

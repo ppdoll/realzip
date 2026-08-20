@@ -148,6 +148,13 @@ export type KaptInfo = {
   dongCnt: number | null;
   totalArea: number | null;
   privArea: number | null;
+  /** 건물 종류 (아파트 / 주상복합 …) */
+  aptKind: string | null;
+  /** 세대 규모 구성 — 전용 60㎡ 이하 / 60~85 / 85~135 / 135 초과 세대수 */
+  units60: number | null;
+  units85: number | null;
+  units135: number | null;
+  unitsOver: number | null;
   useDate: string | null;
   heatNm: string | null;
   hallNm: string | null;
@@ -188,6 +195,11 @@ export async function fetchKaptInfo(kaptCode: string): Promise<KaptInfo | null> 
     dongCnt: toNum(it.kaptDongCnt),
     totalArea: toNum(it.kaptTarea),
     privArea: toNum(it.privArea),
+    aptKind: toStr(it.codeAptNm),
+    units60: toNum(it.kaptMparea60),
+    units85: toNum(it.kaptMparea85),
+    units135: toNum(it.kaptMparea135),
+    unitsOver: toNum(it.kaptMparea136),
     useDate: toStr(it.kaptUsedate),
     heatNm: toStr(it.codeHeatNm),
     hallNm: toStr(it.codeHallNm),

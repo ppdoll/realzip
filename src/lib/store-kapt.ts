@@ -23,6 +23,11 @@ export type KaptRow = {
   dongCnt: number | null;
   totalArea: number | null;
   privArea: number | null;
+  aptKind: string | null;
+  units60: number | null;
+  units85: number | null;
+  units135: number | null;
+  unitsOver: number | null;
   useDate: string | null;
   heatNm: string | null;
   hallNm: string | null;
@@ -48,6 +53,11 @@ function rowToKapt(r: Record<string, unknown>): KaptRow {
     dongCnt: n(r.dong_cnt),
     totalArea: n(r.total_area),
     privArea: n(r.priv_area),
+    aptKind: s(r.apt_kind),
+    units60: n(r.units_60),
+    units85: n(r.units_85),
+    units135: n(r.units_135),
+    unitsOver: n(r.units_over),
     useDate: s(r.use_date),
     heatNm: s(r.heat_nm),
     hallNm: s(r.hall_nm),
@@ -87,6 +97,11 @@ export async function saveKaptInfos(lawdCd: string, infos: KaptInfo[]): Promise<
     dong_cnt: i.dongCnt,
     total_area: i.totalArea,
     priv_area: i.privArea,
+    apt_kind: i.aptKind,
+    units_60: i.units60,
+    units_85: i.units85,
+    units_135: i.units135,
+    units_over: i.unitsOver,
     use_date: i.useDate,
     heat_nm: i.heatNm,
     hall_nm: i.hallNm,
