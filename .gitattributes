@@ -1,0 +1,6 @@
+# Vercel(리눅스)에서 빌드되므로 저장소는 LF 로 통일한다.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ico binary
+*.ttf binary

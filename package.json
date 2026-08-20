@@ -1,0 +1,39 @@
+{
+  "name": "apt-price",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "sync:regions": "tsx scripts/sync-regions.ts",
+    "probe": "tsx scripts/probe-api.ts",
+    "smoke": "tsx scripts/smoke-estimate.ts",
+    "render:check": "tsx scripts/render-check.tsx",
+    "check": "tsc --noEmit && tsx scripts/smoke-estimate.ts && tsx scripts/listing-parse-check.ts && tsx scripts/render-check.tsx",
+    "parse:check": "tsx scripts/listing-parse-check.ts",
+    "db:setup": "tsx scripts/db-setup.ts",
+    "db:check": "tsx scripts/db-check.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4",
+    "fast-xml-parser": "^4.5.0",
+    "next": "^16.3.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "ws": "^8.21.3",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@types/ws": "^8.18.1",
+    "pg": "^8.23.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}
