@@ -55,10 +55,25 @@ function describe(values: number[]): Distribution | null {
 
 // ── 회전율 ──────────────────────────────────────────────────────────────
 
+/** 단지 하나의 회전율 계산 내역 */
+export type TurnoverEntry = {
+  pct: number;
+  /** 최근 1년 매매 (단지의 모든 블록 합산) */
+  sales: number;
+  households: number;
+  /** 이 단지로 붙은 실거래 단지들 — 고층/저층처럼 쪼개져 올 때 둘 이상이다 */
+  blocks: { aptSeq: string; aptNm: string; sales: number }[];
+};
+
 export type TurnoverInfo = {
-  /** 단지별 회전율 (%) — 키는 apt_seq */
+  /**
+   * 회전율 (%) — 키는 apt_seq.
+   * 한 K-apt 단지가 실거래에서 여러 apt_seq 로 쪼개져 오면 모두 같은 값을 가리킨다.
+   */
   byComplex: Map<string, number>;
-  /** 구 전체 분포 */
+  /** kaptCode → 계산 내역. 상세 화면이 같은 값을 쓰려면 이쪽을 본다 */
+  byKapt: Map<string, TurnoverEntry>;
+  /** 구 전체 분포 — 단지(kaptCode) 하나를 한 번만 센다 */
   distribution: Distribution | null;
 };
 
@@ -76,11 +91,17 @@ export async function regionTurnover(lawdCd: string): Promise<TurnoverInfo> {
   const from12 = recentMonths(12)[0];
 
   const [kapt, trades] = await Promise.all([
-    fetchAllPaged<{ umd_nm: string; jibun: string | null; kapt_name: string; households: number | null }>(
+    fetchAllPaged<{
+      kapt_code: string;
+      umd_nm: string;
+      jibun: string | null;
+      kapt_name: string;
+      households: number | null;
+    }>(
       () =>
         db
           .from('apt_kapt')
-          .select('umd_nm, jibun, kapt_name, households')
+          .select('kapt_code, umd_nm, jibun, kapt_name, households')
           .eq('lawd_cd', lawdCd)
           .not('households', 'is', null)
           .gt('households', 0),
@@ -100,6 +121,7 @@ export async function regionTurnover(lawdCd: string): Promise<TurnoverInfo> {
 
   const match = kaptMatcher(
     kapt.map((k) => ({
+      kaptCode: k.kapt_code,
       umdNm: k.umd_nm,
       jibun: k.jibun,
       kaptName: k.kapt_name,
@@ -107,7 +129,7 @@ export async function regionTurnover(lawdCd: string): Promise<TurnoverInfo> {
     })),
   );
 
-  /** 단지(apt_seq)별 거래 건수 + 조인에 쓸 대표 신원 */
+  /** 실거래 단지(apt_seq)별 거래 건수 + 조인에 쓸 대표 신원 */
   const counts = new Map<
     string,
     { n: number; umdNm: string | null; jibun: string | null; aptNm: string }
@@ -118,17 +140,48 @@ export async function regionTurnover(lawdCd: string): Promise<TurnoverInfo> {
     else counts.set(t.apt_seq, { n: 1, umdNm: t.umd_nm, jibun: t.jibun, aptNm: t.apt_nm });
   }
 
-  const byComplex = new Map<string, number>();
-  const values: number[] = [];
+  /**
+   * **K-apt 단지 단위로 합친다.**
+   *
+   * 실거래 자료는 한 단지를 블록으로 쪼개 보낸다 — 상계주공1이 (고층) 144건,
+   * (저층) 6건으로 따로 온다. 세대수는 단지 전체(2,064세대) 하나뿐이라
+   * apt_seq 별로 나누면 저층이 6/2064 = 0.3% 가 되어 "손바뀜 거의 없는 단지" 로
+   * 읽힌다. 실제 상계주공1은 (144+6)/2064 = 7.3% 로 노원 상위권이다.
+   * 실측으로 노원 회전율 최저 7곳 중 4곳이 이런 (저층) 조각이었다.
+   *
+   * 그래서 같은 kaptCode 로 붙은 거래는 모두 더한 뒤 한 번만 나눈다.
+   * 분포도 단지 하나를 한 번만 세도록 kaptCode 기준으로 만든다.
+   */
+  const byKapt = new Map<string, TurnoverEntry>();
   for (const [aptSeq, c] of counts) {
     const k = match(c);
     if (!k || !(k.households > 0)) continue;
-    const pct = round1((c.n / k.households) * 100);
-    byComplex.set(aptSeq, pct);
-    values.push(pct);
+    const block = { aptSeq, aptNm: c.aptNm, sales: c.n };
+    const cur = byKapt.get(k.kaptCode);
+    if (cur) {
+      cur.sales += c.n;
+      cur.blocks.push(block);
+    } else {
+      byKapt.set(k.kaptCode, {
+        pct: 0,
+        sales: c.n,
+        households: k.households,
+        blocks: [block],
+      });
+    }
   }
 
-  const data: TurnoverInfo = { byComplex, distribution: describe(values) };
+  const byComplex = new Map<string, number>();
+  const values: number[] = [];
+  for (const e of byKapt.values()) {
+    e.pct = round1((e.sales / e.households) * 100);
+    e.blocks.sort((a, b) => b.sales - a.sales);
+    // 같은 단지의 블록들은 모두 같은 값을 본다 — 어느 블록으로 들어와도 답이 같아야 한다
+    for (const b of e.blocks) byComplex.set(b.aptSeq, e.pct);
+    values.push(e.pct);
+  }
+
+  const data: TurnoverInfo = { byComplex, byKapt, distribution: describe(values) };
   turnoverCache.set(lawdCd, { at: Date.now(), data });
   return data;
 }

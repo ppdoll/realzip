@@ -11,6 +11,8 @@ export type FactsResponse =
       turnoverLabel: string | null;
       /** 같은 구 분포 안에서의 위치 — 없으면 비교 줄을 접는다 */
       turnover: Positioned | null;
+      /** 실거래에서 쪼개져 온 블록 이름들 (합산했을 때만) */
+      mergedBlocks: string[] | null;
     }
   | { matched: false; reason: string; complex?: { aptNm: string } };
 
@@ -99,6 +101,15 @@ export default function FactsCard({ data, loading, error, regionLabel }: Props) 
         <b>전월세 신고율</b>은 이 세대수를 제가 가진 실거래 기록과 나눠서 낸 값입니다.
       </p>
 
+      {data.mergedBlocks && (
+        <div className="callout">
+          실거래 자료는 이 단지를 <b>{data.mergedBlocks.join(' · ')}</b> 로 나눠서 보냅니다.
+          세대수는 단지 전체 하나뿐이라 조각만 세면 값이 크게 어긋나므로(저층 블록 6건 ÷
+          2,064세대 = 0.3% 처럼), 아래 회전율·신고율은 <b>블록을 모두 합쳐</b> 계산했습니다.
+          위쪽 거래 내역·예상 시세는 고른 블록만 봅니다.
+        </div>
+      )}
+
       <div className="tiles">
         <div className="tile">
           <div className="label">거래 회전율 (1년)</div>
@@ -108,6 +119,7 @@ export default function FactsCard({ data, loading, error, regionLabel }: Props) 
           <div className="foot">
             {f.saleCount12m}건 / {f.households?.toLocaleString('ko-KR') ?? '—'}세대
             {data.turnoverLabel ? ` · ${data.turnoverLabel}` : ''}
+            {data.mergedBlocks ? ` · ${data.mergedBlocks.length}개 블록 합산` : ''}
           </div>
         </div>
 

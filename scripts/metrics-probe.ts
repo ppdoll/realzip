@@ -46,7 +46,8 @@ async function main() {
       }
       const d = info.distribution;
       console.log(
-        `  ${name} n=${String(v.length).padStart(3)}` +
+        `  ${name} 단지 ${String(d?.count ?? v.length).padStart(3)}` +
+        (d && d.count !== v.length ? `(블록 ${v.length})` : '     ') +
           ` | p10 ${f1(quantile(v, 0.1))}  p25 ${f1(quantile(v, 0.25))}` +
           `  중위 ${f1(quantile(v, 0.5))}  p75 ${f1(quantile(v, 0.75))}  p90 ${f1(quantile(v, 0.9))}` +
           ` | 폭(p75/p25) ${(quantile(v, 0.75) / Math.max(quantile(v, 0.25), 0.01)).toFixed(2)}배` +

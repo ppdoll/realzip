@@ -70,21 +70,45 @@ export async function GET(req: Request) {
       });
     }
 
+    /**
+     * 세대수로 나누는 지표는 **단지 전체 거래**로 세야 한다.
+     *
+     * 실거래 자료는 한 단지를 블록으로 쪼개 보낸다 — 상계주공1이 (고층) 144건,
+     * (저층) 6건으로 따로 온다. 세대수는 단지 전체(2,064세대) 하나뿐이라
+     * 조각만 세면 저층이 6/2064 = 0.3% 가 되어 "손바뀜 거의 없는 단지" 로 읽힌다.
+     * 실제 상계주공1은 7.2% 로 노원 상위권이다.
+     *
+     * 구 분포 계산이 이미 kaptCode 단위로 합쳐 두었으니 그 값을 그대로 쓴다 —
+     * 화면의 숫자와 분포 안의 위치가 같은 계산에서 나와야 한다.
+     */
+    let regionTurn: Awaited<ReturnType<typeof regionTurnover>> | null = null;
+    try {
+      regionTurn = await regionTurnover(lawdCd);
+    } catch {
+      // 분포는 부가 정보다 — 못 구해도 단지 정보 자체는 보여준다
+    }
+    const entry = regionTurn?.byKapt.get(kapt.kaptCode) ?? null;
+    const blockNames = entry && entry.blocks.length > 1 ? entry.blocks.map((b) => b.aptNm) : null;
+
     const db = serverClient();
+    // 전월세도 같은 이유로 블록을 모두 합친다
+    const rentNames = entry ? [...new Set(entry.blocks.map((b) => b.aptNm))] : [head.aptNm];
     const [saleCount, rentCount] = await Promise.all([
-      db
-        .from('apt_trade')
-        .select('*', { count: 'exact', head: true })
-        .eq('lawd_cd', lawdCd)
-        .eq('apt_seq', aptSeq)
-        .eq('canceled', false)
-        .gte('deal_ym', from12),
+      entry
+        ? Promise.resolve({ count: entry.sales })
+        : db
+            .from('apt_trade')
+            .select('*', { count: 'exact', head: true })
+            .eq('lawd_cd', lawdCd)
+            .eq('apt_seq', aptSeq)
+            .eq('canceled', false)
+            .gte('deal_ym', from12),
       db
         .from('apt_rent')
         .select('*', { count: 'exact', head: true })
         .eq('lawd_cd', lawdCd)
         .eq('umd_nm', head.umdNm)
-        .eq('apt_nm', head.aptNm)
+        .in('apt_nm', rentNames)
         .gte('deal_ym', from12),
     ]);
 
@@ -95,14 +119,9 @@ export async function GET(req: Request) {
     });
 
     // 회전율 0.9% 는 그 자체로 감이 오지 않는다 — 같은 구 분포 안에서의 위치를 붙인다.
-    // 분포는 나와 똑같이 (거래건수 / K-apt 세대수) 로 계산한 값들이라 비교가 성립한다.
-    let turnover = null;
-    try {
-      const region = await regionTurnover(lawdCd);
-      turnover = position(facts.turnoverPct, region.distribution, valuesOf(region.byComplex));
-    } catch {
-      // 분포는 부가 정보다 — 못 구해도 단지 정보 자체는 보여준다
-    }
+    const turnover = regionTurn
+      ? position(facts.turnoverPct, regionTurn.distribution, valuesOf(regionTurn.byComplex))
+      : null;
 
     return NextResponse.json({
       matched: true,
@@ -110,6 +129,8 @@ export async function GET(req: Request) {
       facts,
       turnoverLabel: turnoverLabel(facts.turnoverPct),
       turnover,
+      /** 실거래에서 쪼개져 온 블록들 — 합산했음을 화면에 밝히기 위해 */
+      mergedBlocks: blockNames,
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
