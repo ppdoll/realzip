@@ -10,6 +10,7 @@ import PriceChart from '@/components/PriceChart';
 import IndexChart from '@/components/IndexChart';
 import EstimateCard from '@/components/EstimateCard';
 import DistBar from '@/components/DistBar';
+import FactsCard from '@/components/FactsCard';
 import { buildRegionIndex, estimate } from '@/lib/estimate';
 import { recentMonths } from '@/lib/months';
 import { PYEONG } from '@/lib/stats';
@@ -156,6 +157,56 @@ checks.push([
   /2\.0%/.test(distHtml) && !/>2%/.test(distHtml),
   'ok',
 ]);
+
+// ── FactsCard: 세대 규모 구성 (값이 없으면 접혀야 한다) ──
+const FACTS_BASE = {
+  kaptCode: 'A1', kaptName: '은마', addr: '서울특별시 강남구 대치동 316 은마',
+  roadAddr: null, households: 4424, dongCnt: 28, topFloor: 14, elevatorCnt: 42,
+  approvedAt: '1979-08-30', heatNm: '지역난방', hallNm: '복도식', mgrNm: '위탁관리',
+  saleNm: '분양', builder: '한보', turnoverPct: 0.9, saleCount12m: 38,
+  rentReportPct: 20.9, rentCount12m: 926, privRatioPct: 70,
+  areaPerHousehold: 79.8, pyeongPerHousehold: 24,
+};
+const renderFacts = (facts: Record<string, unknown>, extra: Record<string, unknown> = {}) =>
+  renderToStaticMarkup(
+    React.createElement(FactsCard, {
+      data: { matched: true, window: { from: '202509', months: 12 }, facts, turnoverLabel: null, turnover: null, mergedBlocks: null, ...extra } as never,
+      loading: false, error: null, regionLabel: '강남구',
+    }),
+  );
+
+// 은마 실제 값 — 85 이하 24, 85~135 4,400
+const mixHtml = renderFacts({
+  ...FACTS_BASE, aptKind: '아파트',
+  unitMix: {
+    bands: [
+      { label: '60㎡ 이하', units: 0, pct: 0 },
+      { label: '60~85㎡', units: 24, pct: 0.5 },
+      { label: '85~135㎡', units: 4400, pct: 99.5 },
+      { label: '135㎡ 초과', units: 0, pct: 0 },
+    ],
+    total: 4424, allSmall: false, smallPct: 0,
+  },
+});
+const segs = (mixHtml.match(/class="mix-seg/g) ?? []).length;
+checks.push(['FactsCard 세대 구성 칸은 0세대를 빼고 그린다', segs === 2, `${segs}칸`]);
+checks.push(['FactsCard 세대 구성 폭 합 100%', /width:99\.5%/.test(mixHtml) && /width:0\.5%/.test(mixHtml), 'ok']);
+checks.push(['FactsCard 세대 구성 범례', (mixHtml.match(/class="mix-key"/g) ?? []).length === 2, 'ok']);
+checks.push(['FactsCard 세대 구성 NaN 없음', !/(NaN|Infinity|undefined)/.test(mixHtml), 'ok']);
+
+// 값이 없으면 그 줄이 아예 없어야 한다 (서울은 8/23 재수집 전까지 null 이다)
+const noMix = renderFacts({ ...FACTS_BASE, aptKind: null, unitMix: null });
+checks.push(['FactsCard 구성 없으면 접힌다', !/mixbar/.test(noMix) && /단지 정보/.test(noMix), 'ok']);
+
+// 원룸형·주상복합 신호가 각주로 나와야 한다
+const smallHtml = renderFacts({
+  ...FACTS_BASE, households: 149, aptKind: '아파트',
+  unitMix: { bands: [{ label: '60㎡ 이하', units: 149, pct: 100 }, { label: '60~85㎡', units: 0, pct: 0 }, { label: '85~135㎡', units: 0, pct: 0 }, { label: '135㎡ 초과', units: 0, pct: 0 }], total: 149, allSmall: true, smallPct: 100 },
+});
+checks.push(['FactsCard 전 세대 소형이면 안내', /전 세대가 전용 60㎡ 이하/.test(smallHtml), 'ok']);
+const mixedHtml = renderFacts({ ...FACTS_BASE, aptKind: '주상복합', unitMix: null });
+checks.push(['FactsCard 주상복합이면 안내', /주상복합입니다/.test(mixedHtml), 'ok']);
+checks.push(['FactsCard 아파트면 주상복합 안내 없음', !/주상복합입니다/.test(mixHtml), 'ok']);
 
 let failed = 0;
 for (const [name, ok, detail] of checks) {

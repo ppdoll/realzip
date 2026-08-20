@@ -99,6 +99,7 @@ export default function FactsCard({ data, loading, error, regionLabel }: Props) 
             {'  '}
             {f.households.toLocaleString('ko-KR')}세대
             {f.dongCnt ? ` · ${f.dongCnt}개 동` : ''}
+            {f.aptKind && f.aptKind !== '아파트' ? ` · ${f.aptKind}` : ''}
           </span>
         )}
       </h2>
@@ -180,6 +181,54 @@ export default function FactsCard({ data, loading, error, regionLabel }: Props) 
         </div>
       )}
 
+      {f.unitMix && (
+        <div className="compare">
+          <div className="compare-head">
+            세대 규모 구성
+            <span className="muted">
+              {' '}
+              — 전용면적으로 나눈 {f.unitMix.total.toLocaleString('ko-KR')}세대
+              {f.unitMix.allSmall
+                ? ' · 전 세대가 60㎡ 이하'
+                : f.unitMix.smallPct >= 50
+                  ? ` · 60㎡ 이하가 ${f.unitMix.smallPct}%`
+                  : ''}
+            </span>
+          </div>
+
+          {/* 부분-전체이고 구간에 순서가 있으니 계열색이 아니라 한 색조의 농담으로 나눈다 */}
+          <div className="mixbar" role="img" aria-label={
+            f.unitMix.bands
+              .filter((b) => b.units > 0)
+              .map((b) => `전용 ${b.label} ${b.units.toLocaleString('ko-KR')}세대 ${b.pct}퍼센트`)
+              .join(', ')
+          }>
+            {f.unitMix.bands.map((b, i) =>
+              b.units === 0 ? null : (
+                <span
+                  key={b.label}
+                  className={`mix-seg s${i}`}
+                  style={{ width: `${b.pct}%` }}
+                  title={`전용 ${b.label} ${b.units.toLocaleString('ko-KR')}세대`}
+                />
+              ),
+            )}
+          </div>
+
+          <div className="mix-legend">
+            {f.unitMix.bands.map((b, i) =>
+              b.units === 0 ? null : (
+                <span key={b.label} className="mix-key">
+                  <i className={`s${i}`} />
+                  {b.label} <b className="tabular">{b.units.toLocaleString('ko-KR')}</b>
+                  <span className="muted"> ({b.pct}%)</span>
+                </span>
+              ),
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="spec-grid">
         <Spec label="사용승인일" value={f.approvedAt} />
         <Spec label="난방방식" value={f.heatNm} />
@@ -215,6 +264,20 @@ export default function FactsCard({ data, loading, error, regionLabel }: Props) 
             ' 서울 대단지는 대개 2~5% 구간에 몰립니다.'
           )}
         </li>
+        {f.aptKind === '주상복합' && (
+          <li>
+            <b>주상복합입니다.</b> 아파트보다 세대수가 적고 손바뀜이 빠른 편이라 회전율이
+            높게 나옵니다 — 실측으로 회전율 15%를 넘은 서울 6개 단지 중 3곳이 주상복합이었고,
+            잘못 계산된 값이 아니라 원래 그런 성격입니다.
+          </li>
+        )}
+        {f.unitMix?.allSmall && (f.unitMix.total >= 50) && (
+          <li>
+            <b>전 세대가 전용 60㎡ 이하입니다.</b> 원룸형·소형 위주 단지라 아파트 평균과
+            같은 잣대로 보면 안 됩니다. 이런 단지는 <b>전세가율이 100%를 넘는 경우</b>도
+            실제로 있습니다 (매매가가 전세보다 낮은 상태). 계산 오류가 아닙니다.
+          </li>
+        )}
         <li>
           <b>전월세 신고율은 임대 비중이 아닙니다.</b> 전월세 계약은 보통 2년이라 매년
           절반쯤만 갱신 신고되고, 갱신 신고가 빠지는 경우도 있습니다. 그래서 임대 비중으로

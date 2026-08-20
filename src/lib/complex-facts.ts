@@ -50,6 +50,28 @@ export type ComplexFacts = {
   areaPerHousehold: number | null;
   /** 같은 값을 평으로 */
   pyeongPerHousehold: number | null;
+
+  /** 건물 종류 (아파트 / 주상복합 …) */
+  aptKind: string | null;
+  /**
+   * 세대 규모 구성 — 없으면 null.
+   *
+   * 방 갯수는 어느 공공데이터에도 없다(K-apt·건축물대장·건축도면·청약홈 모두 확인).
+   * 대신 이 구성이 단지 성격을 보여준다: 2,100세대가 전부 60㎡ 이하면 소형 단지고,
+   * 은마처럼 4,400세대가 85~135㎡ 면 중대형 단지다.
+   * 구간은 청약·세금이 쓰는 전용면적 기준(60·85·135㎡)이다.
+   */
+  unitMix: UnitMix | null;
+};
+
+export type UnitMix = {
+  /** 전용 60㎡ 이하 / 60~85 / 85~135 / 135 초과 세대수 */
+  bands: { label: string; units: number; pct: number }[];
+  total: number;
+  /** 전 세대가 60㎡ 이하 — 원룸형·소형 단지 신호 */
+  allSmall: boolean;
+  /** 60㎡ 이하 비중 (%) */
+  smallPct: number;
 };
 
 function round1(n: number): number {
@@ -69,6 +91,32 @@ export type ComplexFactsInput = {
   /** 이 단지의 최근 12개월 전월세 신고 건수 */
   rentCount12m: number;
 };
+
+/**
+ * 세대 규모 구성. K-apt 가 네 구간 세대수를 주는데, 합이 세대수와 맞지 않거나
+ * 전부 0 이면 안 쓴다 — 일부 단지는 이 값이 비어 있다.
+ */
+export function buildUnitMix(kapt: KaptRow): UnitMix | null {
+  const raw = [
+    { label: '60㎡ 이하', units: kapt.units60 ?? 0 },
+    { label: '60~85㎡', units: kapt.units85 ?? 0 },
+    { label: '85~135㎡', units: kapt.units135 ?? 0 },
+    { label: '135㎡ 초과', units: kapt.unitsOver ?? 0 },
+  ];
+  const total = raw.reduce((sum, b) => sum + b.units, 0);
+  if (total <= 0) return null;
+  // 세대수와 어긋나면 신뢰할 수 없다 (5% 이상 차이나면 버린다)
+  if (kapt.households != null && kapt.households > 0) {
+    if (Math.abs(total - kapt.households) / kapt.households > 0.05) return null;
+  }
+  const small = raw[0].units;
+  return {
+    bands: raw.map((b) => ({ ...b, pct: round1((b.units / total) * 100) })),
+    total,
+    allSmall: small === total,
+    smallPct: round1((small / total) * 100),
+  };
+}
 
 export function buildComplexFacts(input: ComplexFactsInput): ComplexFacts {
   const { kapt, saleCount12m, rentCount12m } = input;
@@ -101,6 +149,8 @@ export function buildComplexFacts(input: ComplexFactsInput): ComplexFacts {
         : null,
     areaPerHousehold: h && kapt.privArea ? round1(kapt.privArea / h) : null,
     pyeongPerHousehold: h && kapt.privArea ? Math.round(kapt.privArea / h / PYEONG) : null,
+    aptKind: kapt.aptKind,
+    unitMix: buildUnitMix(kapt),
   };
 }
 
