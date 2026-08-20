@@ -126,3 +126,135 @@ alter table kapt_ingest_log enable row level security;
 
 -- 이미 numeric(8,2) 로 만들어 둔 경우에만 (전용면적 소수 3자리 보존):
 --   alter table apt_trade alter column area type numeric(9,4);
+
+-- ──────────────────────────────────────────────────────────────────────────
+--  조건 검색 (지역 · 평형 · 금액) — DB 안에서 집계한다
+-- ──────────────────────────────────────────────────────────────────────────
+--
+-- 노드로 끌어와서 집계하면 못 쓴다. 실측: 63개 지역 · 최근 1년 · 15~50평 ·
+-- 3~20억 조건이 175,280행 18.1초였다 (20~30평 5~8억도 36,631행 6.5초).
+-- 여기서 필요한 건 단지·평형별 중위값 한 줄씩이라, 그 집계를 DB 에 맡기면
+-- 넘어오는 건 수백 줄로 줄어든다.
+--
+-- 금액 조건은 **개별 거래가 아니라 단지·평형의 중위값**에 건다. 거래를 먼저
+-- 금액으로 걸러내고 중위를 내면, 싼 거래 한 건 때문에 들어온 단지의 중위가
+-- 조건 구간 안으로 끌려 들어가서 실제 시세를 잘못 보여준다.
+--
+-- security definer 를 쓰지 않는다. RLS 가 켜져 있고 정책이 없으므로 anon 키로
+-- 부르면 0행이 나오고, 서버의 secret 키로 부를 때만 값이 나온다.
+-- 반환 컬럼이 바뀌면 create or replace 가 거부하므로 먼저 지운다.
+-- 함수는 상태가 없어서 여러 번 지우고 만들어도 안전하다.
+drop function if exists search_complexes(
+  text[], text, numeric, numeric, int, int, int, text, int, int
+);
+
+create or replace function search_complexes(
+  p_lawd_cds  text[],
+  p_from_ym   text,
+  p_area_min  numeric,
+  p_area_max  numeric,
+  p_price_min int,
+  p_price_max int,
+  p_min_deals int  default 1,
+  p_sort      text default 'price_asc',
+  p_limit     int  default 300,
+  p_offset    int  default 0
+)
+returns table (
+  lawd_cd    text,
+  apt_seq    text,
+  apt_nm     text,
+  umd_nm     text,
+  build_year int,
+  area       numeric,
+  area_min   numeric,
+  area_max   numeric,
+  price      int,
+  deal_count int,
+  min_amount int,
+  max_amount int,
+  last_deal  date,
+  total_rows bigint
+)
+language sql
+stable
+as $$
+  with base as (
+    select t.lawd_cd, t.apt_seq, t.apt_nm, t.umd_nm, t.build_year, t.area, t.amount, t.deal_date
+    from apt_trade t
+    where t.lawd_cd = any(p_lawd_cds)
+      and t.deal_ym >= p_from_ym
+      and t.canceled = false
+      and t.area >= p_area_min
+      and t.area <= p_area_max
+  ),
+  -- 같은 단지 안에서 서로 1.5㎡ 이내인 면적은 한 타입으로 묶는다.
+  -- 정수 ㎡ 로 반올림하면 0.2㎡ 차이가 경계를 넘어 갈린다 — 실측으로
+  -- 하이파크시티일산파밀리에2단지가 121.45㎡(20건) 와 121.66㎡(10건) 로
+  -- 쪼개져 화면에 같은 36.8평 두 줄로 나왔다. 84.44 / 84.57 도 같은 문제다.
+  -- 6개 지역 24,513건으로 재보니 정수 반올림은 236쌍을 잘못 쪼갰고,
+  -- 이 방식은 폭이 1.5㎡ 를 넘는 묶음이 20개(3㎡ 초과 3개) 남는다.
+  -- 1.5㎡ 는 상세 화면이 "같은 평형" 으로 쓰는 기준과 같다.
+  areas as (
+    select distinct lawd_cd, apt_seq, area from base
+  ),
+  marked as (
+    select lawd_cd, apt_seq, area,
+      case
+        when area - lag(area) over (partition by lawd_cd, apt_seq order by area) > 1.5 then 1
+        else 0
+      end as brk
+    from areas
+  ),
+  clustered as (
+    select lawd_cd, apt_seq, area,
+      sum(brk) over (
+        partition by lawd_cd, apt_seq order by area
+        rows between unbounded preceding and current row
+      ) as cid
+    from marked
+  ),
+  grouped as (
+    select
+      b.lawd_cd,
+      b.apt_seq,
+      c.cid,
+      min(b.apt_nm)                                            as apt_nm,
+      min(b.umd_nm)                                            as umd_nm,
+      max(b.build_year)                                        as build_year,
+      round(avg(b.area), 1)                                    as area,
+      round(min(b.area), 1)                                    as area_min,
+      round(max(b.area), 1)                                    as area_max,
+      percentile_cont(0.5) within group (order by b.amount)::int as price,
+      count(*)::int                                            as deal_count,
+      min(b.amount)::int                                       as min_amount,
+      max(b.amount)::int                                       as max_amount,
+      max(b.deal_date)                                         as last_deal
+    from base b
+    join clustered c
+      on c.lawd_cd = b.lawd_cd and c.apt_seq = b.apt_seq and c.area = b.area
+    group by b.lawd_cd, b.apt_seq, c.cid
+  ),
+  filtered as (
+    select * from grouped
+    where price between p_price_min and p_price_max
+      and deal_count >= p_min_deals
+  )
+  select
+    f.lawd_cd, f.apt_seq, f.apt_nm, f.umd_nm, f.build_year,
+    f.area, f.area_min, f.area_max,
+    f.price, f.deal_count, f.min_amount, f.max_amount, f.last_deal,
+    count(*) over () as total_rows
+  from filtered f
+  order by
+    case when p_sort = 'price_asc'  then f.price                                    end asc,
+    case when p_sort = 'price_desc' then f.price                                    end desc,
+    case when p_sort = 'ppa_asc'    then f.price::numeric / nullif(f.area, 0)        end asc,
+    case when p_sort = 'ppa_desc'   then f.price::numeric / nullif(f.area, 0)        end desc,
+    case when p_sort = 'deals_desc' then f.deal_count                               end desc,
+    case when p_sort = 'recent'     then f.last_deal                                end desc,
+    -- 마지막 세 줄은 동순위 정리용이다. 전순서가 아니면 offset 페이지에서
+    -- 같은 줄이 두 번 오거나 빠진다.
+    f.price asc, f.apt_seq asc, f.area asc
+  limit greatest(p_limit, 1) offset greatest(p_offset, 0)
+$$;

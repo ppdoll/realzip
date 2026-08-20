@@ -1026,3 +1026,206 @@ table.data tr.canceled td {
   color: var(--text-primary);
   font-weight: 650;
 }
+
+/* ── 화면 모드 탭 ──────────────────────────────────────────────────────── */
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+.tab {
+  flex: 0 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 16px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  color: var(--text-secondary);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.tab:hover {
+  border-color: var(--series-1);
+}
+.tab[aria-pressed='true'] {
+  color: var(--text-primary);
+  border-color: var(--series-1);
+  background: var(--series-1-wash);
+}
+.tab-sub {
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+.tab[aria-pressed='true'] .tab-sub {
+  color: var(--text-secondary);
+}
+.tab:focus-visible {
+  outline: 2px solid var(--series-1);
+  outline-offset: 2px;
+}
+
+/* ── 조건 검색 ─────────────────────────────────────────────────────────── */
+.find-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 0;
+  border-top: 1px solid var(--grid);
+}
+.find-row:first-of-type {
+  border-top: 0;
+  padding-top: 4px;
+}
+.find-label {
+  flex: 0 0 52px;
+  padding-top: 7px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.find-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chip {
+  padding: 5px 11px;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  /* 손가락으로도 누를 수 있게 */
+  min-height: 30px;
+}
+.chip:hover {
+  border-color: var(--series-1);
+}
+.chip[aria-pressed='true'] {
+  color: var(--text-primary);
+  font-weight: 600;
+  border-color: var(--series-1);
+  background: var(--series-1-wash);
+}
+.chip-action {
+  color: var(--text-muted);
+  border-style: dashed;
+}
+.chip:focus-visible {
+  outline: 2px solid var(--series-1);
+  outline-offset: 1px;
+}
+
+.find-range {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+.find-range .num {
+  width: 78px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.find-range .unit {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.find-range .muted {
+  color: var(--text-muted);
+}
+.find-range .inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.find-range .inline .control {
+  width: auto;
+}
+
+/* 결과 표 — 넓어지면 표 안에서만 좌우로 넘긴다 (페이지 전체가 밀리면 안 된다) */
+.table-wrap {
+  overflow-x: auto;
+  margin: 0 -2px;
+}
+.find-table {
+  width: 100%;
+  min-width: 520px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.find-table th {
+  padding: 8px 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-align: left;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.find-table th.r,
+.find-table td.r {
+  text-align: right;
+}
+.find-table td {
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--grid);
+  vertical-align: top;
+}
+.find-table tbody tr:hover {
+  background: var(--series-1-wash);
+}
+.find-table .sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+.find-table .link {
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--series-1);
+  background: none;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+}
+.find-table .link:hover {
+  text-decoration: underline;
+}
+.find-table .link:focus-visible {
+  outline: 2px solid var(--series-1);
+  outline-offset: 2px;
+}
+
+@media (max-width: 560px) {
+  .find-row {
+    flex-direction: column;
+    gap: 6px;
+  }
+  .find-label {
+    flex: none;
+    padding-top: 0;
+  }
+}

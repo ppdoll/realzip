@@ -1,3 +1,4 @@
+import { areaClusterer } from './area-bands';
 import { kaptMatcher } from './kapt-match';
 import { median, quantile } from './stats';
 import { recentMonths } from './months';
@@ -243,9 +244,32 @@ export async function regionJeonseRatios(lawdCd: string): Promise<JeonseRatioInf
     ),
   ]);
 
-  /** (법정동|단지명|면적버킷) → 금액들 */
-  const bucket = (umd: string, apt: string, area: number) =>
-    `${norm(umd)}|${norm(apt)}|${Math.round(area)}`;
+  /**
+   * 면적 묶음은 **매매·전월세 면적을 합쳐서** 만든다.
+   *
+   * 정수 ㎡ 로 반올림하면 84.44(매매)와 84.57(전세)이 84 와 85 로 갈려서
+   * 같은 타입인데 짝이 안 맞고, 그 단지는 전세가율이 아예 계산되지 않는다.
+   * 그래서 단지(법정동+단지명)별로 양쪽 면적을 모아 1.5㎡ 안쪽을 한 묶음으로 만든다.
+   */
+  const complexKey = (umd: string, apt: string) => `${norm(umd)}|${norm(apt)}`;
+  const areasByComplex = new Map<string, number[]>();
+  const pushArea = (umd: string, apt: string, area: number) => {
+    const k = complexKey(umd, apt);
+    const g = areasByComplex.get(k);
+    if (g) g.push(area);
+    else areasByComplex.set(k, [area]);
+  };
+  for (const t of trades) pushArea(t.umd_nm ?? '', t.apt_nm, Number(t.area));
+  for (const r of rents) pushArea(r.umd_nm ?? '', r.apt_nm, Number(r.area));
+
+  const clusterers = new Map<string, (v: number) => number>();
+  for (const [k, list] of areasByComplex) clusterers.set(k, areaClusterer(list));
+
+  /** (법정동|단지명|면적묶음) → 금액들 */
+  const bucket = (umd: string, apt: string, area: number) => {
+    const k = complexKey(umd, apt);
+    return `${k}|${clusterers.get(k)?.(area) ?? -1}`;
+  };
 
   const saleAmounts = new Map<string, number[]>();
   /** 어느 버킷이 어느 apt_seq 인지 (거래가 가장 많은 평형을 대표로 쓴다) */

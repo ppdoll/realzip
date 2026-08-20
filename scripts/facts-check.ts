@@ -6,6 +6,7 @@
  * 조인 키를 뽑는 주소 파싱과, 세대수로 나누는 지표 계산을 고정한다.
  */
 import { parseAddr } from '../src/lib/kapt';
+import { areaClusterer, roomsHint } from '../src/lib/area-bands';
 import { kaptMatcher, matchKapt } from '../src/lib/kapt-match';
 import { buildComplexFacts, turnoverLabel } from '../src/lib/complex-facts';
 import type { KaptRow } from '../src/lib/store-kapt';
@@ -225,6 +226,46 @@ check(
   ),
   '색인판과 단건 매칭 결과가 같다',
 );
+
+// -- 면적 묶음 --
+// 정수 ㎡ 로 반올림하면 경계에 걸린 같은 타입이 갈린다. 실제로 겪은 값들이다:
+//   하이파크시티일산파밀리에2단지 121.45㎡(20건) / 121.66㎡(10건) -> 화면에 같은 36.8평 두 줄
+//   84.44 / 84.57 -> 84 와 85 로 갈려 매매·전세 짝이 안 맞음
+{
+  const c = areaClusterer([121.45, 121.66, 146.51, 173.77, 84.44, 84.57]);
+  check(c(121.45) === c(121.66), '121.45 와 121.66 은 같은 묶음', `${c(121.45)} / ${c(121.66)}`);
+  check(c(84.44) === c(84.57), '84.44 와 84.57 은 같은 묶음');
+  check(c(84.44) !== c(121.45), '84㎡ 와 121㎡ 는 다른 묶음');
+  check(c(146.51) !== c(173.77), '146㎡ 와 173㎡ 는 다른 묶음');
+  // 매매에만 있는 면적을 전세 쪽에서 물어봐도 같은 묶음이어야 짝이 맞는다
+  check(c(84.5) === c(84.44), '목록에 없는 84.5 도 가까운 묶음에 붙는다', String(c(84.5)));
+  check(c(200) === -1, '어느 묶음과도 멀면 -1');
+  // 간격 기준을 넘으면 갈라야 한다
+  const d = areaClusterer([59.9, 61.6]);
+  check(d(59.9) !== d(61.6), '1.7㎡ 차이는 갈린다', `${d(59.9)} / ${d(61.6)}`);
+}
+{
+  // 정확히 기준(1.5㎡)인 경우 — 초과일 때만 갈라야 한다
+  const c = areaClusterer([80, 81.5, 83.1]);
+  check(c(80) === c(81.5), '정확히 1.5㎡ 차이는 같은 묶음');
+  check(c(81.5) !== c(83.1), '1.6㎡ 차이는 갈린다 (기준 초과)', `${c(81.5)} / ${c(83.1)}`);
+}
+check(areaClusterer([]) (84) === -1, '빈 목록이면 -1');
+
+// -- 방 수 참고 표기 (데이터가 아니라 통념이라는 점을 고정한다) --
+// 구간은 전용면적 기준이다. 평으로 자르면 전용 84㎡(25.4평)가 20평대로 떨어지고
+// 전용 59㎡(17.9평, 흔히 24평형이라 부르는 표준 3룸)가 "원룸~2룸" 이 된다 — 실제로 겪었다.
+check(roomsHint(84.9) === '보통 3룸', '전용 84.9㎡ 는 보통 3룸 (60~85 구간)', String(roomsHint(84.9)));
+check(roomsHint(59.9) === '보통 2~3룸', '전용 59.9㎡ 는 40~60 구간', String(roomsHint(59.9)));
+// 법령 기준은 "60㎡ 이하" / "60 초과 85 이하" / "85 초과" 다. 경계값이 아래 구간에 든다.
+check(roomsHint(60) === '보통 2~3룸', '전용 60.0㎡ 은 40~60 구간 (60 이하)', String(roomsHint(60)));
+check(roomsHint(60.1) === '보통 3룸', '전용 60.1㎡ 은 60~85 구간', String(roomsHint(60.1)));
+check(roomsHint(85) === '보통 3룸', '전용 85.0㎡ 은 국민주택 규모 (85 이하)', String(roomsHint(85)));
+check(roomsHint(85.1) === '보통 3~4룸', '전용 85.1㎡ 은 85 초과', String(roomsHint(85.1)));
+check(roomsHint(0) === null, '면적 0 은 구간 없음');
+check(roomsHint(24) === '원룸~2룸', '전용 24㎡ 는 원룸~2룸', String(roomsHint(24)));
+check(roomsHint(114) === '보통 3~4룸', '전용 114㎡ 는 85~135 구간', String(roomsHint(114)));
+check(roomsHint(140) === '4룸 이상', '전용 140㎡ 는 135 초과', String(roomsHint(140)));
 
 console.log(failed === 0 ? '\n단지 정보 로직 검증 통과' : `\n실패 ${failed}건`);
 process.exit(failed === 0 ? 0 : 1);

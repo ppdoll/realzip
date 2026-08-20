@@ -6,6 +6,7 @@ import type { Complex, Estimate, IndexPoint, Trade } from '@/lib/types';
 import { krwShort, pyeong } from '@/lib/format';
 import EstimateCard from './EstimateCard';
 import FactsCard, { type FactsResponse } from './FactsCard';
+import FindPanel from './FindPanel';
 import IndexChart from './IndexChart';
 import PriceChart from './PriceChart';
 import RentCard, { type RentResponse } from './RentCard';
@@ -43,6 +44,8 @@ type ComplexResponse = {
 
 export default function AppShell({ sidoList }: { sidoList: { sido: string; regions: Region[] }[] }) {
   const [sido, setSido] = useState(sidoList[0]?.sido ?? '');
+  /** 화면 모드 — 단지를 알고 찾을 때(lookup)와 조건으로 훑을 때(find)는 하는 일이 다르다 */
+  const [mode, setMode] = useState<'lookup' | 'find'>('lookup');
   const [lawdCd, setLawdCd] = useState(sidoList[0]?.regions[0]?.code ?? '');
   const [query, setQuery] = useState('');
 
@@ -298,9 +301,41 @@ export default function AppShell({ sidoList }: { sidoList: { sido: string; regio
         <span className="sub">국토교통부 실거래 신고 데이터 · 최근 3년</span>
       </header>
 
+      <nav className="tabs" aria-label="화면 전환">
+        <button
+          className="tab"
+          aria-pressed={mode === 'lookup'}
+          onClick={() => setMode('lookup')}
+        >
+          단지 조회
+          <span className="tab-sub">이름을 알 때</span>
+        </button>
+        <button className="tab" aria-pressed={mode === 'find'} onClick={() => setMode('find')}>
+          조건으로 찾기
+          <span className="tab-sub">지역 · 평형 · 금액</span>
+        </button>
+      </nav>
+
       <div className="layout">
         <main className="col-main">
+          {mode === 'find' && (
+            <FindPanel
+              onSelect={(code, seq, a) => {
+                // 조건 목록에서 고르면 그 단지 상세로 넘어간다 — 모드도 함께 바꾼다
+                const sd = sidoByCode.get(code);
+                if (sd) setSido(sd);
+                setLawdCd(code);
+                setSearch(null);
+                setFloor('');
+                setMode('lookup');
+                void loadComplex(seq, { region: code, area: a });
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+            />
+          )}
+
           {/* ── 필터 한 줄 ── */}
+          {mode === 'lookup' && (
           <div className="card">
             <div className="filters">
               <div className="field">
@@ -371,9 +406,10 @@ export default function AppShell({ sidoList }: { sidoList: { sido: string; regio
               </div>
             )}
           </div>
+          )}
 
           {/* ── 단지 목록 ── */}
-          {search && (
+          {mode === 'lookup' && search && (
             <div className="card">
               <h2 className="card-title">
                 {search.region.label} · 단지 {search.complexes.length.toLocaleString('ko-KR')}곳
