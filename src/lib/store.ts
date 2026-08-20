@@ -223,12 +223,13 @@ export type RegionData = {
 /**
  * 시군구 1곳의 from~to 거래를 반환한다. 없는 달은 국토부에서 받아 채운다.
  * @param onlyCached true 면 API 호출 없이 저장된 것만 반환 (빠른 응답용)
+ * @param force true 면 TTL 을 무시하고 이 구간을 전부 다시 받는다 (크론 갱신용)
  */
 export async function getRegionTrades(
   lawdCd: string,
   from: string,
   to: string,
-  opts: { onlyCached?: boolean; concurrency?: number } = {},
+  opts: { onlyCached?: boolean; concurrency?: number; force?: boolean } = {},
 ): Promise<RegionData> {
   const yms = monthRange(from, to);
   const mode = storeMode();
@@ -238,7 +239,7 @@ export async function getRegionTrades(
     const cached = new Map<string, Trade[]>();
     const missing: string[] = [];
     for (const ym of yms) {
-      const hit = memGet(lawdCd, ym);
+      const hit = opts.force ? null : memGet(lawdCd, ym);
       if (hit) cached.set(ym, hit);
       else missing.push(ym);
     }
@@ -260,7 +261,10 @@ export async function getRegionTrades(
   }
 
   // supabase 모드
-  const fresh = await freshMonths(lawdCd, yms);
+  // force 면 ingest_log 를 보지 않고 전 구간을 다시 받는다. 예전에는 크론이
+  // ingest_log 를 지워서 강제했는데, 그러면 도중에 함수가 끊길 때 "받은 적 없는 달"로
+  // 보여 커버리지 집계에서 사라졌다.
+  const fresh = opts.force ? new Set<string>() : await freshMonths(lawdCd, yms);
   const missing = yms.filter((ym) => !fresh.has(ym));
 
   if (!opts.onlyCached && missing.length > 0) {
@@ -288,6 +292,34 @@ function assertUsable(
   if (trades.length > 0) return;
   if (requested.length === 0 || errors.length < requested.length) return;
   throw new Error(errors[0].message);
+}
+
+/**
+ * 최근 몇 달 기준으로 "갱신이 가장 오래된 지역" 순서. 크론이 이 순서로 돈다.
+ *
+ * 별도 커서 테이블을 두지 않고 ingest_log 의 fetched_at 을 그대로 쓴다 —
+ * 한 번에 다 돌지 못해도 다음 실행이 자연히 뒤에서 이어받고, 실행이 끊겨도
+ * 상태가 어긋나지 않는다.
+ */
+export async function regionsByStaleness(
+  months: string[],
+): Promise<{ lawdCd: string; oldestFetchedAt: number }[]> {
+  const { data, error } = await supabase()
+    .from('ingest_log')
+    .select('lawd_cd, fetched_at')
+    .in('deal_ym', months);
+  if (error) throw new Error(`ingest_log 조회 실패: ${error.message}`);
+
+  const oldest = new Map<string, number>();
+  for (const row of data ?? []) {
+    const code = row.lawd_cd as string;
+    const at = new Date(row.fetched_at as string).getTime();
+    const cur = oldest.get(code);
+    if (cur === undefined || at < cur) oldest.set(code, at);
+  }
+  return [...oldest.entries()]
+    .map(([lawdCd, oldestFetchedAt]) => ({ lawdCd, oldestFetchedAt }))
+    .sort((a, b) => a.oldestFetchedAt - b.oldestFetchedAt);
 }
 
 /** 특정 단지의 거래만 (시군구 데이터를 받은 뒤 필터) */
