@@ -773,3 +773,38 @@ table.data tr.canceled td {
     display: none;
   }
 }
+
+/* ── 단지 정보 스펙 표 ────────────────────────────────────────────────── */
+.spec-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 0 18px;
+  margin-top: 16px;
+  border-top: 1px solid var(--grid);
+  padding-top: 4px;
+}
+
+.spec {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 7px 2px;
+  border-bottom: 1px solid var(--grid);
+  font-size: 13px;
+  min-width: 0;
+}
+
+.spec .k {
+  color: var(--text-secondary);
+  flex: 0 0 auto;
+}
+
+.spec .v {
+  color: var(--text-primary);
+  font-weight: 550;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

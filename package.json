@@ -12,13 +12,15 @@
     "probe": "tsx scripts/probe-api.ts",
     "smoke": "tsx scripts/smoke-estimate.ts",
     "render:check": "tsx scripts/render-check.tsx",
-    "check": "tsc --noEmit && tsx scripts/smoke-estimate.ts && tsx scripts/rent-parse-check.ts && tsx scripts/similar-check.ts && tsx scripts/render-check.tsx",
+    "check": "tsc --noEmit && tsx scripts/smoke-estimate.ts && tsx scripts/rent-parse-check.ts && tsx scripts/similar-check.ts && tsx scripts/facts-check.ts && tsx scripts/render-check.tsx",
     "db:setup": "tsx scripts/db-setup.ts",
     "db:check": "tsx scripts/db-check.ts",
     "rent:check": "tsx scripts/rent-parse-check.ts",
     "ingest": "tsx scripts/ingest.ts",
     "db:size": "tsx scripts/db-size.ts",
-    "similar:check": "tsx scripts/similar-check.ts"
+    "similar:check": "tsx scripts/similar-check.ts",
+    "ingest:kapt": "tsx scripts/ingest-kapt.ts",
+    "facts:check": "tsx scripts/facts-check.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",

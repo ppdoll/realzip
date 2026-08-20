@@ -77,11 +77,52 @@ create table if not exists rent_ingest_log (
   primary key (lawd_cd, deal_ym)
 );
 
+-- ── 공동주택 단지 정보 (K-apt) ────────────────────────────────────────────
+-- 실거래가와 조인 키가 없다. K-apt 는 kaptCode, 실거래가는 aptSeq 라서
+-- **주소(법정동 + 지번)** 로 맞춘다 — 이름은 표기가 너무 갈려서 못 쓴다
+-- ("THESHARP판교퍼스트파크" vs "더샵판교퍼스트파크", "까치마을(1단지)(대우롯데선경)" 등).
+-- 조인율 실측(강남구): 거래 20건 이상 단지 79%, 5건 이상 63%.
+-- K-apt 가 의무관리대상(300세대 이상 등)만 담기 때문에 소규모 단지는 애초에 없다.
+create table if not exists apt_kapt (
+  kapt_code    text primary key,
+  lawd_cd      text not null,
+  umd_nm       text not null,
+  jibun        text,               -- 주소에서 뽑은 지번 (조인 키)
+  kapt_name    text not null,
+  addr         text,
+  road_addr    text,
+  households   int,                -- 세대수 (kaptdaCnt)
+  dong_cnt     int,                -- 동수
+  total_area   numeric(14,2),      -- 연면적 (kaptTarea)
+  priv_area    numeric(14,2),      -- 전용면적 합 (privArea)
+  use_date     text,               -- 사용승인일 YYYYMMDD
+  heat_nm      text,               -- 난방방식 (지역/개별/중앙)
+  hall_nm      text,               -- 복도식 / 계단식 / 혼합
+  mgr_nm       text,               -- 위탁관리 / 자치관리
+  sale_nm      text,               -- 분양 / 임대
+  builder      text,               -- 시공사
+  top_floor    int,
+  elevator_cnt int,
+  updated_at   timestamptz not null default now()
+);
+
+create index if not exists apt_kapt_join_idx on apt_kapt (lawd_cd, umd_nm, jibun);
+create index if not exists apt_kapt_name_idx on apt_kapt (lawd_cd, kapt_name);
+
+-- 어느 시군구의 단지 목록을 언제 받았는지 (단지 목록 1회 + 단지별 기본정보 N회)
+create table if not exists kapt_ingest_log (
+  lawd_cd    text primary key,
+  complexes  int  not null default 0,
+  fetched_at timestamptz not null default now()
+);
+
 -- 서버(service_role)에서만 접근하므로 RLS 를 켜고 정책은 두지 않는다.
 alter table apt_trade       enable row level security;
 alter table ingest_log      enable row level security;
 alter table apt_rent        enable row level security;
 alter table rent_ingest_log enable row level security;
+alter table apt_kapt        enable row level security;
+alter table kapt_ingest_log enable row level security;
 
 -- 이미 numeric(8,2) 로 만들어 둔 경우에만 (전용면적 소수 3자리 보존):
 --   alter table apt_trade alter column area type numeric(9,4);

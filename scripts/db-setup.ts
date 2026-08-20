@@ -17,7 +17,15 @@ import { loadEnv } from './env';
 
 loadEnv();
 
-const TABLES = ['apt_trade', 'ingest_log'];
+/** schema.sql 이 만드는 표 전체 — 새 표를 넣으면 여기도 넣어야 보고에 나온다 */
+const TABLES = [
+  'apt_trade',
+  'ingest_log',
+  'apt_rent',
+  'rent_ingest_log',
+  'apt_kapt',
+  'kapt_ingest_log',
+];
 
 async function main() {
   const url = process.env.SUPABASE_DB_URL?.trim();
