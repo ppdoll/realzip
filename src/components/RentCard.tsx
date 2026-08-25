@@ -165,12 +165,13 @@ export default function RentCard({ data, loading, error, salePrice, regionLabel 
               </div>
             </div>
             <div className="tile">
-              <div className="label">1년 신고 건수</div>
+              <div className="label">신고 건수</div>
               <div className="value tabular">
                 {s?.jeonseCount ?? 0}
                 <span style={{ fontSize: 13, fontWeight: 500 }}> / {s?.monthlyCount ?? 0}</span>
               </div>
-              <div className="foot">전세 / 월세</div>
+              {/* 월세는 전세보다 짧게 보관한다 — 기간이 다르니 그대로 밝힌다 */}
+              <div className="foot">전세 1년 / 월세 3개월</div>
             </div>
             <div className="tile">
               <div className="label">신규 계약 중위</div>
@@ -291,6 +292,12 @@ export default function RentCard({ data, loading, error, salePrice, regionLabel 
             <li>
               보증금이 있는 월세(반전세)는 월세로 분류했습니다. 표에서 보증금/월세를 같이
               확인하세요.
+            </li>
+            <li>
+              <b>전세는 최근 1년, 월세는 최근 3개월</b>만 담고 있습니다. 전월세 신고는
+              매매의 3배 가까이 들어와서 전부 담으면 저장 공간을 넘깁니다. 전세가율 같은
+              핵심 계산은 전세만 쓰기 때문에, 월세 쪽을 짧게 잡아 전세 정확도는 그대로
+              두었습니다 — 월세는 &quot;지금 얼마쯤&quot;을 보는 용도라 3개월이면 읽힙니다.
             </li>
             <li>
               전세 예측구간이 매매보다 넓은 것은 <b>실제 분산이 크기 때문</b>입니다. 같은

@@ -1,4 +1,4 @@
-import { RENT_WINDOW_MONTHS } from './config';
+import { MONTHLY_RENT_WINDOW_MONTHS, RENT_WINDOW_MONTHS } from './config';
 import { fetchRentMonths, type RentMonthResult } from './molit-rent';
 import { monthRange, recentMonths } from './months';
 import { storeMode, ttlFor, type StoreMode } from './store';
@@ -347,9 +347,10 @@ export async function getRegionRents(
  */
 export async function pruneOldRents(
   now = new Date(),
-): Promise<{ cutoff: string; trades: number; logs: number }> {
-  const months = recentMonths(RENT_WINDOW_MONTHS, now);
-  const cutoff = months[0];
+): Promise<{ cutoff: string; monthlyCutoff: string; trades: number; monthly: number; logs: number }> {
+  const cutoff = recentMonths(RENT_WINDOW_MONTHS, now)[0];
+  /** 월세는 더 짧게 — 이유는 config.ts 의 MONTHLY_RENT_WINDOW_MONTHS 주석에 있다 */
+  const monthlyCutoff = recentMonths(MONTHLY_RENT_WINDOW_MONTHS, now)[0];
   const db = serverClient();
 
   // 지운 개수를 알기 위해 먼저 센다 (전월세 표는 지역당 수천 행 수준이라 부담 없다)
@@ -358,6 +359,17 @@ export async function pruneOldRents(
     .select('*', { count: 'exact', head: true })
     .lt('deal_ym', cutoff);
   if (before.error) throw wrapDbError('apt_rent 정리 대상 조회 실패', before.error.message);
+
+  // 창 안이지만 월세 보관 기간을 넘긴 것
+  const beforeMonthly = await db
+    .from('apt_rent')
+    .select('*', { count: 'exact', head: true })
+    .gte('deal_ym', cutoff)
+    .lt('deal_ym', monthlyCutoff)
+    .gt('monthly_rent', 0);
+  if (beforeMonthly.error) {
+    throw wrapDbError('apt_rent 월세 정리 대상 조회 실패', beforeMonthly.error.message);
+  }
 
   const beforeLogs = await db
     .from('rent_ingest_log')
@@ -368,14 +380,32 @@ export async function pruneOldRents(
   }
 
   const trades = before.count ?? 0;
+  const monthly = beforeMonthly.count ?? 0;
   const logs = beforeLogs.count ?? 0;
-  if (trades === 0 && logs === 0) return { cutoff, trades: 0, logs: 0 };
+  if (trades === 0 && monthly === 0 && logs === 0) {
+    return { cutoff, monthlyCutoff, trades: 0, monthly: 0, logs: 0 };
+  }
 
-  const delTrades = await db.from('apt_rent').delete().lt('deal_ym', cutoff);
-  if (delTrades.error) throw wrapDbError('apt_rent 정리 실패', delTrades.error.message);
+  if (trades > 0) {
+    const delTrades = await db.from('apt_rent').delete().lt('deal_ym', cutoff);
+    if (delTrades.error) throw wrapDbError('apt_rent 정리 실패', delTrades.error.message);
+  }
 
-  const delLogs = await db.from('rent_ingest_log').delete().lt('deal_ym', cutoff);
-  if (delLogs.error) throw wrapDbError('rent_ingest_log 정리 실패', delLogs.error.message);
+  if (monthly > 0) {
+    const delMonthly = await db
+      .from('apt_rent')
+      .delete()
+      .gte('deal_ym', cutoff)
+      .lt('deal_ym', monthlyCutoff)
+      .gt('monthly_rent', 0);
+    if (delMonthly.error) throw wrapDbError('apt_rent 월세 정리 실패', delMonthly.error.message);
+  }
 
-  return { cutoff, trades, logs };
+  // 로그는 전세 기준으로만 지운다 — 월세를 지웠다고 그 달을 안 받은 것은 아니다
+  if (logs > 0) {
+    const delLogs = await db.from('rent_ingest_log').delete().lt('deal_ym', cutoff);
+    if (delLogs.error) throw wrapDbError('rent_ingest_log 정리 실패', delLogs.error.message);
+  }
+
+  return { cutoff, monthlyCutoff, trades, monthly, logs };
 }

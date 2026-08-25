@@ -13,15 +13,26 @@ import { serverClient } from './supabase';
 
 /**
  * 행당 평균 바이트 (인덱스 포함).
- * `npm run db:size` 로 실측한 값 — apt_trade 379B, apt_rent 399B (2026-08, 100만 행 기준).
- * 처음엔 450 으로 잡았다가 13% 과대추정이라 교정했다.
+ *
+ * `npm run db:size` 실측으로 교정해 왔다: 450 -> 390 -> **422**.
+ * 390 으로 두면 8% 낮게 봐서 실제로는 한도를 넘었는데 가드가 통과시킨다 —
+ * 실제로 그렇게 13개 지역이 들어와 무료 티어를 넘겼다(2026-08-25).
+ *
+ * VACUUM 직후에는 383B 까지 내려가지만 그 값을 쓰지 않는다. 지우기만 하고
+ * 청소하지 않으면 공간이 OS 로 돌아오지 않아 실제 사용량은 계속 이보다 크다.
+ * 가드는 **넉넉히 잡아 일찍 막는 쪽**이 맞다.
  */
-const BYTES_PER_ROW = 390;
+const BYTES_PER_ROW = 422;
 const FREE_TIER_BYTES = 500 * 1024 * 1024;
 /** 이 비율을 넘으면 새 지역을 받지 않는다 */
-const STOP_RATIO = 0.92;
+const STOP_RATIO = 0.9;
 /** 카운트 캐시 — 콜드 요청마다 세면 낭비다 */
 const TTL_MS = 5 * 60 * 1000;
+/**
+ * 새 지역 하나가 늘리는 행 수 (실측 평균).
+ * 76개 지역 1,289,859행 = 지역당 약 17,000행이다.
+ */
+const ROWS_PER_NEW_REGION = 17_000;
 
 let cache: { rows: number; at: number } | null = null;
 
@@ -56,10 +67,20 @@ export async function capacityStatus(): Promise<CapacityStatus> {
   };
 }
 
-/** 새 지역 수집 직전에 부른다. 한계면 무엇을 해야 하는지 알려주며 던진다. */
+/**
+ * 새 지역 수집 직전에 부른다. 한계면 무엇을 해야 하는지 알려주며 던진다.
+ *
+ * 통과시킬 때 **예상 행 수를 캐시에 미리 더한다.** 캐시가 5분짜리라 그 안에 여러
+ * 지역이 몰리면 전부 옛 숫자를 보고 통과한다 — 실제로 2026-08-25 새벽 11분 동안
+ * 13개 지역이 그렇게 들어와 무료 티어를 넘겼다. 미리 더해 두면 같은 창 안에서도
+ * 다음 요청이 늘어난 값을 본다.
+ */
 export async function assertCanIngestNewRegion(label: string): Promise<void> {
   const s = await capacityStatus();
-  if (s.canIngestNewRegion) return;
+  if (s.canIngestNewRegion) {
+    if (cache) cache.rows += ROWS_PER_NEW_REGION;
+    return;
+  }
   throw new Error(
     `저장 용량이 한계에 가까워 새 지역(${label})을 담을 수 없습니다 — ` +
       `현재 약 ${s.estimatedMb}MB (무료 티어 500MB의 ${Math.round(s.usedRatio * 100)}%). ` +
