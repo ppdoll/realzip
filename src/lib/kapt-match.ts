@@ -17,12 +17,16 @@ export type KaptCandidate = {
   umdNm: string;
   jibun: string | null;
   kaptName: string;
+  /** 사용승인일 YYYYMMDD — 준공년도 대조에 쓴다 (없으면 대조하지 않는다) */
+  useDate?: string | null;
 };
 
 export type TradeIdentity = {
   umdNm: string | null;
   jibun: string | null;
   aptNm: string;
+  /** 실거래 신고의 건축년도 */
+  buildYear?: number | null;
 };
 
 export const normName = (s: string | null | undefined): string =>
@@ -45,7 +49,11 @@ const stripGeneric = (n: string): string =>
  * **정규화 전 원본에서 뽑는다.** normName 이 하이픈을 지우기 때문에 정규화 뒤에 뽑으면
  * "월계6-2초안" 이 [62] 가 되어 "초안2" 의 [2] 와 안 겹치게 된다. 원본에서 뽑으면 [6,2] 다.
  */
-const digitsOf = (v: string): number[] => (v.match(/\d+/g) ?? []).map(Number);
+const digitsOf = (v: string): number[] =>
+  // 괄호 안은 지번이나 동 번호라 단지 번호가 아니다 — 실측으로 "월드컵아이파크(667)",
+  // "동익미라벨(1060)", "동부(105동~106동)" 처럼 들어온다. 이걸 단지 번호로 세면
+  // "월드컵아이파크1단지" 와 숫자가 어긋나 정답을 물린다.
+  ((v.replace(/\([^)]*\)/g, '')).match(/\d+/g) ?? []).map(Number);
 
 /**
  * 숫자가 서로 완전히 어긋나면 true — 같은 지번이어도 다른 단지로 본다.
@@ -80,6 +88,30 @@ function nameMatches(kaptName: string, targetRaw: string): boolean {
   const st = stripGeneric(t);
   return sn === st || sn.includes(st) || st.includes(sn);
 }
+
+/**
+ * 준공년도가 크게 어긋나면 다른 건물이다.
+ *
+ * 실거래 건축년도와 K-apt 사용승인 연도는 **실측 6,919단지 중 98.05%가 정확히
+ * 일치**한다 (1년 차이 0.6%, 2년 차이 0.4%). 3년 이상 어긋난 0.97%는 눈으로 본
+ * 15건이 전부 오조인이었다 — 짧은 이름이 긴 이름에 포함돼 붙은 것들이다:
+ *   "개포자이르네"(2022) -> "개포자이아파트"(2004)
+ *   "롯데아파트"(1998)   -> "롯데캐슬헤론"(2006)
+ *   "금호"(2002)        -> "강서금호어울림퍼스티어"(2023)
+ *   "팰리스필"(2004)     -> "광명팰리스필2차"(2007)
+ * 한쪽 연도가 없으면 대조하지 않는다 — 근거가 없는 것과 어긋나는 것은 다르다.
+ */
+function yearGap(cand: KaptCandidate, target: TradeIdentity): number | null {
+  const ky = cand.useDate ? Number(String(cand.useDate).slice(0, 4)) : NaN;
+  const ty = target.buildYear ?? NaN;
+  if (!(ky > 1900) || !(ty > 1900)) return null;
+  return Math.abs(ky - ty);
+}
+
+/** 3년 이상 차이나면 다른 건물로 본다 */
+const YEAR_HARD_GAP = 3;
+/** 이름까지 전혀 안 맞으면 2년 차이만으로도 거부한다 */
+const YEAR_SOFT_GAP = 2;
 
 /**
  * 이름이 걸린 후보가 여럿일 때 하나를 고른다. 못 고르면 null — **찍지 않는다.**
@@ -177,24 +209,52 @@ export function matchKapt<T extends KaptCandidate>(candidates: T[], target: Trad
 
   if (target.jibun) {
     const sameJibun = inDong.filter((c) => c.jibun === target.jibun);
-    // 지번이 하나만 걸리면 이름은 보지 않는다 — 표기가 너무 갈려서 이름을 조건으로 걸면
-    // "THESHARP판교퍼스트파크" 같은 것들이 통째로 빠진다. 지번이 가장 강한 근거다.
-    // 단, **단지 번호가 서로 다르면 거부한다.** K-apt 가 상계주공15·16단지를 같은
-    // 지번(상계동 624)에 올려 둔 것처럼 지번이 겹치는 경우가 실제로 있어서,
-    // 그럴 때 번호를 무시하면 엉뚱한 단지의 세대수를 가져다 쓴다.
     if (sameJibun.length === 1) {
-      return numbersConflict(sameJibun[0].kaptName, name) ? null : sameJibun[0];
-    }
-    if (sameJibun.length > 1) {
+      const only = sameJibun[0];
+      const gap = yearGap(only, target);
+      /**
+       * 지번이 하나만 걸리면 보통 이름은 보지 않는다 — 표기가 너무 갈려서 이름을
+       * 조건으로 걸면 "THESHARP판교퍼스트파크" 같은 것들이 통째로 빠진다.
+       * 물리는 경우는 셋뿐이다:
+       *   · 단지 번호가 어긋난다 (K-apt 가 상계주공15·16단지를 같은 지번에 올려 뒀다)
+       *   · 준공년도가 3년 이상 어긋난다 (팰리스필 2004 vs 광명팰리스필2차 2007)
+       *   · 이름이 전혀 안 맞으면서 준공년도도 2년 이상 어긋난다
+       *     (평내동 661 에 K-apt 는 e편한세상 메트로원 2022 인데 실거래
+       *      평내호평역대명루첸포레스티움 2020 도 지번을 661 로 신고했다)
+       */
+      /**
+       * 이름이 정확히 같고 지번도 같으면 연도는 보지 않는다 — 가장 강한 근거 둘이
+       * 맞는데 연도만 어긋나면 어느 한쪽 자료의 오기다. 실측: 은평 불광롯데캐슬은
+       * 실거래 1998년 · K-apt 승인 2013년으로 15년이나 벌어져 있는데 같은 건물이다.
+       */
+      const sameName = normName(only.kaptName) === normName(name);
+      const rejected =
+        !sameName &&
+        (numbersConflict(only.kaptName, name) ||
+          (gap != null && gap >= YEAR_HARD_GAP) ||
+          (gap != null && gap >= YEAR_SOFT_GAP && !nameMatches(only.kaptName, name)));
+      /**
+       * 물렸으면 **포기하지 말고 아래 이름 찾기로 넘어간다.** 지번이 잘못 신고된
+       * 경우가 있어서다 — 위 대명루첸은 K-apt 에 제 항목(지번 191, 1,008세대)이
+       * 있는데, 여기서 그냥 포기하면 맞는 짝까지 잃는다.
+       */
+      if (!rejected) return only;
+    } else if (sameJibun.length > 1) {
+      // 같은 지번에 여럿이면 이름으로 가린다. 못 가리면 포기한다 (아래로 넘어가지 않는다) —
+      // 지번이 맞는 후보들 사이에서 못 고른 것을, 지번도 안 맞는 것으로 대신할 수는 없다.
       return pickBest(
-        sameJibun.filter((c) => nameMatches(c.kaptName, name)),
+        sameJibun.filter(
+          (c) => nameMatches(c.kaptName, name) && !((yearGap(c, target) ?? 0) >= YEAR_HARD_GAP),
+        ),
         name,
       );
     }
   }
 
   return pickBest(
-    inDong.filter((c) => nameMatches(c.kaptName, name)),
+    inDong.filter(
+      (c) => nameMatches(c.kaptName, name) && !((yearGap(c, target) ?? 0) >= YEAR_HARD_GAP),
+    ),
     name,
   );
 }

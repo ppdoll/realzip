@@ -108,21 +108,28 @@ export async function regionTurnover(lawdCd: string): Promise<TurnoverInfo> {
       jibun: string | null;
       kapt_name: string;
       households: number | null;
+      use_date: string | null;
     }>(
       () =>
         db
           .from('apt_kapt')
-          .select('kapt_code, umd_nm, jibun, kapt_name, households')
+          .select('kapt_code, umd_nm, jibun, kapt_name, households, use_date')
           .eq('lawd_cd', lawdCd)
           .not('households', 'is', null)
           .gt('households', 0),
       { label: 'apt_kapt 조회' },
     ),
-    fetchAllPaged<{ apt_seq: string; apt_nm: string; umd_nm: string; jibun: string | null }>(
+    fetchAllPaged<{
+      apt_seq: string;
+      apt_nm: string;
+      umd_nm: string;
+      jibun: string | null;
+      build_year: number | null;
+    }>(
       () =>
         db
           .from('apt_trade')
-          .select('apt_seq, apt_nm, umd_nm, jibun')
+          .select('apt_seq, apt_nm, umd_nm, jibun, build_year')
           .eq('lawd_cd', lawdCd)
           .eq('canceled', false)
           .gte('deal_ym', from12),
@@ -136,6 +143,7 @@ export async function regionTurnover(lawdCd: string): Promise<TurnoverInfo> {
       umdNm: k.umd_nm,
       jibun: k.jibun,
       kaptName: k.kapt_name,
+      useDate: k.use_date,
       households: Number(k.households),
     })),
   );
@@ -143,12 +151,25 @@ export async function regionTurnover(lawdCd: string): Promise<TurnoverInfo> {
   /** 실거래 단지(apt_seq)별 거래 건수 + 조인에 쓸 대표 신원 */
   const counts = new Map<
     string,
-    { n: number; umdNm: string | null; jibun: string | null; aptNm: string }
+    {
+      n: number;
+      umdNm: string | null;
+      jibun: string | null;
+      aptNm: string;
+      buildYear: number | null;
+    }
   >();
   for (const t of trades) {
     const cur = counts.get(t.apt_seq);
     if (cur) cur.n++;
-    else counts.set(t.apt_seq, { n: 1, umdNm: t.umd_nm, jibun: t.jibun, aptNm: t.apt_nm });
+    else
+      counts.set(t.apt_seq, {
+        n: 1,
+        umdNm: t.umd_nm,
+        jibun: t.jibun,
+        aptNm: t.apt_nm,
+        buildYear: t.build_year == null ? null : Number(t.build_year),
+      });
   }
 
   /**

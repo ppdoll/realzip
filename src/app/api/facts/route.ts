@@ -61,7 +61,7 @@ export async function GET(req: Request) {
     }
     const head = complexTrades[complexTrades.length - 1];
 
-    const kapt = await findKapt(lawdCd, head.umdNm, head.jibun, head.aptNm);
+    const kapt = await findKapt(lawdCd, head.umdNm, head.jibun, head.aptNm, head.buildYear);
     if (!kapt) {
       return NextResponse.json({
         matched: false,

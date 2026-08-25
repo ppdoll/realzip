@@ -152,6 +152,8 @@ export async function findKapt(
   umdNm: string,
   jibun: string | null,
   aptNm: string,
+  /** 실거래 신고의 건축년도 — 준공년도가 크게 어긋나는 후보를 걸러낸다 */
+  buildYear?: number | null,
 ): Promise<KaptRow | null> {
   let rows: Record<string, unknown>[];
   try {
@@ -163,7 +165,7 @@ export async function findKapt(
     throw wrapDbError('apt_kapt 조회 실패', e instanceof Error ? e.message : String(e));
   }
   if (rows.length === 0) return null;
-  return matchKapt(rows.map(rowToKapt), { umdNm, jibun, aptNm });
+  return matchKapt(rows.map(rowToKapt), { umdNm, jibun, aptNm, buildYear });
 }
 
 /** 커버리지 확인용 — 시군구별 적재 현황 */
