@@ -556,26 +556,23 @@ table.data tr.canceled td {
   min-width: 0;
 }
 
-.col-side {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+/**
+ * 세로 광고 칸 — **왼쪽**. 오른쪽은 검색 기록이 쓴다.
+ *
+ * DOM 에서는 맨 뒤에 있고 여기서 첫 칸으로 옮긴다. 본문보다 앞에 두면
+ * 화면 낭독기와 탭 이동이 광고를 먼저 만난다.
+ *
+ * 자리가 넉넉할 때만 만든다 (아래 min-width 분기). 칸이 없는데 배너를 그리면
+ * 보이지 않는 곳에 노출이 잡히므로, 좁은 화면에서는 AdFit 이 아예 그리지 않고
+ * 아래 가로 배너로 넘어간다 — 두 곳의 기준 폭이 같아야 한다.
+ */
+.col-ad {
+  display: none;
 }
 
-/**
- * 오른쪽 칸에서 상단 고정은 **하나만** 쓴다.
- *
- * 검색 기록과 광고를 둘 다 top:20 으로 붙이면 서로 포개진다 — 실측으로
- * 기록이 20~148, 광고가 40~640 에 겹쳐서 그렸다. 둘을 함께 붙이려면 칸 전체를
- * 고정해야 하는데, 기록(최대 10건)에 600px 광고를 더하면 화면보다 길어져서
- * 광고 아래쪽이 잘린다.
- *
- * 그래서 **긴 쪽인 광고를 고정하고 기록은 같이 흐르게** 뒀다. 기록은 128px 라
- * 금방 다시 올려 볼 수 있고, 세로 배너는 계속 보이는 편이 제 역할에 맞는다.
- */
 .history {
-  position: static;
+  position: sticky;
+  top: 20px;
 }
 
 @media (max-width: 960px) {
@@ -584,6 +581,33 @@ table.data tr.canceled td {
   }
   .history {
     position: static;
+  }
+}
+
+/**
+ * 넓은 화면에서만 왼쪽 광고 칸을 만든다.
+ *
+ * 1280 은 AdFit.tsx 의 PC_MIN_WIDTH 와 같은 값이어야 한다.
+ * 본문 폭을 지키려고 페이지도 함께 넓힌다 — 1140 그대로 두면 본문이
+ * 788 -> 612px 로 눌려서 표와 차트가 읽기 나빠진다.
+ */
+@media (min-width: 1280px) {
+  .page {
+    max-width: 1320px;
+  }
+  .layout {
+    grid-template-columns: 176px minmax(0, 1fr) 296px;
+  }
+  .col-ad {
+    display: block;
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .col-main {
+    grid-column: 2;
+  }
+  .history {
+    grid-column: 3;
   }
 }
 
@@ -1328,17 +1352,27 @@ table.data tr.canceled td {
    (localhost 에서 모바일 단위가 그랬다) 자리만 잡아 두면 빈 칸이 그대로 남는다.
    채워질 때 아래 내용이 밀리지만, 둘 다 각 영역의 맨 끝이라 읽던 자리를
    잃지 않는다. */
+/**
+ * 광고 크기로 가둔다. 애드핏이 채우면서 ins 를 block 으로 바꾸는데, 폭을 정해 주지
+ * 않으면 감싼 칸만큼 늘어난다 — 실측으로 320×100 배너가 1,060px 로 퍼졌다.
+ * 아래 폭은 AdFit.tsx 의 UNITS 와 같은 값이어야 한다.
+ */
 .adfit {
   display: flex;
   justify-content: center;
 }
+.adfit > ins {
+  max-width: 100%;
+}
 .adfit-pc {
-  /* 오른쪽 칸에서 상단 고정은 이것 하나뿐이다 (.history 주석 참고) */
+  max-width: 160px;
+  margin: 0 auto;
   position: sticky;
   top: 20px;
 }
 .adfit-mobile {
-  margin-top: 16px;
+  max-width: 320px;
+  margin: 16px auto 0;
 }
 /* 광고가 안 내려오면 여백도 남기지 않는다 */
 .adfit:empty,

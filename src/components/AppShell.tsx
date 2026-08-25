@@ -652,14 +652,19 @@ export default function AppShell({ sidoList }: { sidoList: { sido: string; regio
           )}
         </main>
 
-        {/* 오른쪽 칸 — 검색 기록 아래에 세로 광고. 기록이 스티키라 광고는 따로 흐른다 */}
-        <div className="col-side">
-          <SearchHistory
-            entries={history}
-            activeKey={activeKey}
-            onSelect={openFromHistory}
-            onClear={() => setHistory([])}
-          />
+        <SearchHistory
+          entries={history}
+          activeKey={activeKey}
+          onSelect={openFromHistory}
+          onClear={() => setHistory([])}
+        />
+
+        {/*
+          세로 광고는 **왼쪽 칸**에 놓는다 — 오른쪽은 검색 기록이 쓴다.
+          DOM 에서는 맨 뒤에 두고 CSS 로 첫 칸에 배치한다. 본문보다 앞에 두면
+          화면 낭독기와 탭 이동이 광고를 먼저 만난다.
+        */}
+        <div className="col-ad">
           <AdFit kind="pc" />
         </div>
       </div>
