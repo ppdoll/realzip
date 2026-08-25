@@ -276,3 +276,34 @@ as $$
     f.price asc, f.apt_seq asc, f.area asc
   limit greatest(p_limit, 1) offset greatest(p_offset, 0)
 $$;
+
+-- ──────────────────────────────────────────────────────────────────────────
+--  지역 장기 가격지수 — 원본 거래를 안 들고도 10년 흐름을 보여준다
+-- ──────────────────────────────────────────────────────────────────────────
+--
+-- 10년치 원본을 담으면 매매만 약 2,280,000행 850MB 라 무료 티어(500MB)의 두 배다.
+-- 그런데 예상 시세는 최근성 반감기가 12개월이라 7년 전 거래의 가중치가 2^-84 ≈ 0 —
+-- 850MB 를 더 써도 추정값은 그대로다. 10년이 실제로 쓸모 있는 곳은 **장기 흐름 차트**
+-- 하나뿐이고, 그건 월별 요약만 있으면 그린다.
+--
+-- 76개 지역 × 120개월 = 9,120행. 원본의 0.4% 다.
+--
+-- 적재 방식: 국토부에서 그 달을 받아 **집계만 남기고 원본은 버린다**.
+-- 그래서 이 표는 apt_trade 의 보관 창(36개월)과 무관하게 과거를 가진다.
+create table if not exists region_index (
+  lawd_cd   text not null,
+  deal_ym   text not null,
+  -- 전용 평당 만원 중위값. 평균이 아니라 중위인 이유는 한 달 안에 초고가 한 건이
+  -- 섞여도 흔들리지 않아야 하기 때문이다.
+  ppp_median numeric(12,2) not null,
+  -- 사분위 — 그 달 가격이 얼마나 퍼져 있었는지 (차트 밴드용)
+  ppp_p25    numeric(12,2),
+  ppp_p75    numeric(12,2),
+  deals      int not null default 0,
+  updated_at timestamptz not null default now(),
+  primary key (lawd_cd, deal_ym)
+);
+
+create index if not exists region_index_ym_idx on region_index (lawd_cd, deal_ym);
+
+alter table region_index enable row level security;

@@ -9,6 +9,7 @@ import AdFit from './AdFit';
 import FactsCard, { type FactsResponse } from './FactsCard';
 import FindPanel from './FindPanel';
 import IndexChart from './IndexChart';
+import LongTermChart, { type LongTermPoint } from './LongTermChart';
 import PriceChart from './PriceChart';
 import RentCard, { type RentResponse } from './RentCard';
 import SearchHistory, { HISTORY_LIMIT, type HistoryEntry } from './SearchHistory';
@@ -47,6 +48,8 @@ export default function AppShell({ sidoList }: { sidoList: { sido: string; regio
   const [sido, setSido] = useState(sidoList[0]?.sido ?? '');
   /** 화면 모드 — 단지를 알고 찾을 때(lookup)와 조건으로 훑을 때(find)는 하는 일이 다르다 */
   const [mode, setMode] = useState<'lookup' | 'find'>('lookup');
+  /** 지역 장기 흐름 — 원본이 아니라 월별 요약이라 3년 창 밖까지 본다 */
+  const [longTerm, setLongTerm] = useState<LongTermPoint[]>([]);
   const [lawdCd, setLawdCd] = useState(sidoList[0]?.regions[0]?.code ?? '');
   const [query, setQuery] = useState('');
 
@@ -241,6 +244,16 @@ export default function AppShell({ sidoList }: { sidoList: { sido: string; regio
       // 추천만 예상가가 있어야 해서 매매 결과가 온 뒤에 부른다.
       void loadRent(aptSeq, region, opts.area ?? null);
       void loadFacts(region, aptSeq);
+      // 장기 흐름은 지역만 알면 되고 요약이라 가볍다 — 같이 출발시킨다
+      void (async () => {
+        try {
+          const r = await fetch(`/api/region-index?lawdCd=${region}`);
+          const j = await r.json();
+          if (reqId === reqIdRef.current) setLongTerm(j.points ?? []);
+        } catch {
+          if (reqId === reqIdRef.current) setLongTerm([]);
+        }
+      })();
       try {
         const params = new URLSearchParams({ lawdCd: region, aptSeq });
         if (opts.area) params.set('area', String(opts.area));
@@ -612,6 +625,40 @@ export default function AppShell({ sidoList }: { sidoList: { sido: string; regio
                 </p>
                 <IndexChart index={detail.index} />
               </div>
+
+              {longTerm.length >= 6 && (
+                <div className="card">
+                  <h2 className="card-title">
+                    {detail.region.label} 장기 흐름
+                    <span className="muted" style={{ fontWeight: 400, fontSize: 13 }}>
+                      {'  '}
+                      {Math.round(longTerm.length / 12)}년
+                    </span>
+                  </h2>
+                  <p className="card-sub">
+                    그 달에 <b>실제로 거래된</b> 전용 평단가의 중위값입니다. 옅은 띠는 같은 달
+                    안에서 가운데 절반이 어디에 있었는지 보여줍니다 — 같은 달에도 단지·평형에
+                    따라 두세 배씩 벌어집니다.
+                  </p>
+                  <LongTermChart
+                    points={longTerm}
+                    regionName={REGION_BY_CODE.get(detail.region.code)?.name ?? detail.region.label}
+                  />
+                  <ul className="notes">
+                    <li>
+                      이 선은 <b>어느 동네가 거래됐는지에 흔들립니다.</b> 그 달에 비싼 동에서
+                      거래가 몰리면 시세가 그대로여도 올라갑니다. 위쪽 &quot;시세 흐름&quot;
+                      차트는 같은 단지·평형끼리만 비교해 그 흔들림을 걷어낸 값이라 목적이
+                      다릅니다 — 단지 하나의 변화는 그쪽으로 보세요.
+                    </li>
+                    <li className="muted">
+                      거래 원본은 최근 3년만 보관하고, 그 이전은 <b>월별 요약만</b> 남겨
+                      둡니다. 10년치 원본은 저장 공간이 8배 넘게 들지만 예상 시세는 최근
+                      1년에 거의 다 기대므로 값이 달라지지 않습니다.
+                    </li>
+                  </ul>
+                </div>
+              )}
 
               <TradeTable trades={chartTrades.length > 0 ? chartTrades : detail.trades} />
 

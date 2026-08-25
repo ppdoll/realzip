@@ -1385,3 +1385,18 @@ table.data tr.canceled td {
     gap: 12px;
   }
 }
+
+/* 장기 흐름 차트 아래 요약 줄 */
+.lt-foot {
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.lt-foot b {
+  color: var(--text-primary);
+  font-weight: 620;
+}
+.lt-foot .muted {
+  color: var(--text-muted);
+}
