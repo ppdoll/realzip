@@ -5,6 +5,7 @@ import { REGION_BY_CODE, type Region } from '@/data/regions';
 import type { Complex, Estimate, IndexPoint, Trade } from '@/lib/types';
 import { krwShort, pyeong } from '@/lib/format';
 import EstimateCard from './EstimateCard';
+import AdFit from './AdFit';
 import FactsCard, { type FactsResponse } from './FactsCard';
 import FindPanel from './FindPanel';
 import IndexChart from './IndexChart';
@@ -651,13 +652,20 @@ export default function AppShell({ sidoList }: { sidoList: { sido: string; regio
           )}
         </main>
 
-        <SearchHistory
-          entries={history}
-          activeKey={activeKey}
-          onSelect={openFromHistory}
-          onClear={() => setHistory([])}
-        />
+        {/* 오른쪽 칸 — 검색 기록 아래에 세로 광고. 기록이 스티키라 광고는 따로 흐른다 */}
+        <div className="col-side">
+          <SearchHistory
+            entries={history}
+            activeKey={activeKey}
+            onSelect={openFromHistory}
+            onClear={() => setHistory([])}
+          />
+          <AdFit kind="pc" />
+        </div>
       </div>
+
+      {/* 모바일 가로 광고 — 내용 끝. PC 에서는 아예 그리지 않는다 */}
+      <AdFit kind="mobile" />
     </div>
   );
 }
