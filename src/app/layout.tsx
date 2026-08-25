@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import ServiceWorker from '@/components/ServiceWorker';
 import './globals.css';
 
 /**
@@ -43,6 +44,17 @@ export const metadata: Metadata = {
   },
   // 실거래가 추정치라 검색 노출 자체는 막지 않지만, 미리보기 텍스트는 그대로 쓰게 둔다
   robots: { index: true, follow: true },
+  /**
+   * iOS 는 매니페스트를 보지 않는다 — 홈 화면에 담을 때 쓰는 값을 따로 준다.
+   * `statusBarStyle: 'default'` 로 두는 이유: 이 앱은 라이트·다크를 모두 쓰는데
+   * black-translucent 로 두면 상태바 글자가 배경과 겹쳐 안 보이는 경우가 생긴다.
+   */
+  appleWebApp: {
+    capable: true,
+    title: '실거래가',
+    statusBarStyle: 'default',
+  },
+  formatDetection: { telephone: false },
 };
 
 export const viewport: Viewport = {
@@ -57,7 +69,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ko">
-      <body>{children}</body>
+      <body>
+        {children}
+        <ServiceWorker />
+      </body>
     </html>
   );
 }

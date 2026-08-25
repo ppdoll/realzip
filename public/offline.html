@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>연결 없음 · 아파트 실거래가</title>
+    <!--
+      서비스 워커가 화면을 못 받아왔을 때만 뜬다.
+      여기서 지난 시세를 보여주지 않는 것이 중요하다 — 실거래가는 날마다 움직여서
+      캐시해 둔 값을 현재 값처럼 보여주면 잘못된 판단을 부른다.
+      그래서 "연결이 없다" 는 사실만 말하고 다시 시도할 길만 준다.
+    -->
+    <style>
+      :root {
+        --surface-0: #f6f5f2;
+        --surface-1: #fcfcfb;
+        --border: #e2e0d9;
+        --text-primary: #0b0b0b;
+        --text-secondary: #52514e;
+        --series-1: #2a78d6;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --surface-0: #121211;
+          --surface-1: #1a1a19;
+          --border: #32312d;
+          --text-primary: #ffffff;
+          --text-secondary: #c3c2b7;
+          --series-1: #3987e5;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: var(--surface-0);
+        color: var(--text-primary);
+        font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont,
+          system-ui, 'Segoe UI', 'Malgun Gothic', sans-serif;
+        line-height: 1.6;
+      }
+      .box {
+        width: 100%;
+        max-width: 420px;
+        padding: 28px 24px;
+        background: var(--surface-1);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        text-align: center;
+      }
+      .mark { width: 44px; height: 44px; margin: 0 auto 16px; display: block; }
+      h1 { margin: 0 0 8px; font-size: 18px; font-weight: 700; }
+      p { margin: 0 0 6px; font-size: 14px; color: var(--text-secondary); }
+      .note { margin-top: 14px; font-size: 12.5px; }
+      button {
+        margin-top: 20px;
+        padding: 10px 20px;
+        font: inherit;
+        font-size: 14px;
+        font-weight: 600;
+        color: #fff;
+        background: var(--series-1);
+        border: 0;
+        border-radius: 9px;
+        cursor: pointer;
+        min-height: 40px;
+      }
+      button:focus-visible { outline: 2px solid var(--series-1); outline-offset: 2px; }
+    </style>
+  </head>
+  <body>
+    <div class="box">
+      <svg class="mark" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="아파트 실거래가">
+        <rect width="32" height="32" rx="7" fill="#2a78d6" />
+        <g fill="#ffffff">
+          <path d="M6.5 25.5V20Q6.5 18.5 8 18.5h2Q11.5 18.5 11.5 20v5.5Z" />
+          <path d="M13.5 25.5V14.5Q13.5 13 15 13h2Q18.5 13 18.5 14.5v11Z" />
+          <path d="M20.5 25.5V8.5Q20.5 7 22 7h2Q25.5 7 25.5 8.5v17Z" />
+        </g>
+      </svg>
+      <h1>연결이 끊겼습니다</h1>
+      <p>인터넷에 연결되면 다시 볼 수 있습니다.</p>
+      <p class="note">
+        실거래가는 매일 새 신고가 들어와 값이 바뀝니다. 그래서 저장해 둔 지난 시세를
+        대신 보여드리지 않습니다 — 오래된 값을 지금 값으로 읽으시면 안 되기 때문입니다.
+      </p>
+      <button type="button" onclick="location.reload()">다시 시도</button>
+    </div>
+  </body>
+</html>
