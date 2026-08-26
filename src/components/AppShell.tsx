@@ -422,6 +422,14 @@ export default function AppShell({ sidoList }: { sidoList: { sido: string; regio
           </div>
           )}
 
+          {/*
+            가로 배너는 **검색창 바로 아래**에 둔다. 본문 끝에 뒀더니 조회 결과가
+            길어서 광고가 화면 밖으로 밀려났다. 여기 두면 조회 전후 모두 첫 화면에
+            남는다. 조건 검색 모드에서는 FindPanel 이 자기 필터 아래에 같은 자리를
+            그린다 (그쪽 검색창 아래여야 하므로).
+          */}
+          {mode === 'lookup' && <AdFit slot="banner" />}
+
           {/* ── 단지 목록 ── */}
           {mode === 'lookup' && search && (
             <div className="card">
@@ -698,13 +706,6 @@ export default function AppShell({ sidoList }: { sidoList: { sido: string; regio
             </div>
           )}
 
-          {/*
-            가로 배너. 위 안내 문구 바로 아래에 놓되 **조건 밖**에 둔다 —
-            안내 문구는 첫 화면에서만 보이는데, 조건 안에 넣으면 조회하는 순간
-            광고도 함께 사라진다. 여기 두면 첫 화면에서는 문구 아래, 조회 뒤에는
-            본문 끝에 남는다.
-          */}
-          <AdFit slot="banner" />
         </main>
 
         <SearchHistory

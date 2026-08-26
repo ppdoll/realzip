@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import AdFit from './AdFit';
 import { AREA_BANDS, m22py, py2m2, roomsHint } from '@/lib/area-bands';
 import { krwShort, shortDate } from '@/lib/format';
 
@@ -521,6 +522,9 @@ export default function FindPanel({
           </li>
         </ul>
       </div>
+
+      {/* 가로 배너 — 조건 검색에서도 검색창(필터) 바로 아래에 둔다 */}
+      <AdFit slot="banner" />
 
       {data && (
         <div className="card">
