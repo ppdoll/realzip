@@ -1355,7 +1355,7 @@ table.data tr.canceled td {
 /**
  * 광고 크기로 가둔다. 애드핏이 채우면서 ins 를 block 으로 바꾸는데, 폭을 정해 주지
  * 않으면 감싼 칸만큼 늘어난다 — 실측으로 320×100 배너가 1,060px 로 퍼졌다.
- * 아래 폭은 AdFit.tsx 의 UNITS 와 같은 값이어야 한다.
+ * 아래 폭은 AdFit.tsx 의 SLOTS 와 같은 값이어야 한다.
  */
 .adfit {
   display: flex;
@@ -1364,7 +1364,11 @@ table.data tr.canceled td {
 .adfit > ins {
   max-width: 100%;
 }
-.adfit-pc {
+.adfit-banner {
+  max-width: 728px;
+  margin: 0 auto 16px;
+}
+.adfit-rail {
   max-width: 160px;
   margin: 0 auto;
   position: sticky;

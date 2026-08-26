@@ -697,6 +697,14 @@ export default function AppShell({ sidoList }: { sidoList: { sido: string; regio
               </p>
             </div>
           )}
+
+          {/*
+            가로 배너. 위 안내 문구 바로 아래에 놓되 **조건 밖**에 둔다 —
+            안내 문구는 첫 화면에서만 보이는데, 조건 안에 넣으면 조회하는 순간
+            광고도 함께 사라진다. 여기 두면 첫 화면에서는 문구 아래, 조회 뒤에는
+            본문 끝에 남는다.
+          */}
+          <AdFit slot="banner" />
         </main>
 
         <SearchHistory
@@ -712,12 +720,12 @@ export default function AppShell({ sidoList }: { sidoList: { sido: string; regio
           화면 낭독기와 탭 이동이 광고를 먼저 만난다.
         */}
         <div className="col-ad">
-          <AdFit kind="pc" />
+          <AdFit slot="rail" />
         </div>
       </div>
 
       {/* 모바일 가로 광고 — 내용 끝. PC 에서는 아예 그리지 않는다 */}
-      <AdFit kind="mobile" />
+      <AdFit slot="mobile" />
     </div>
   );
 }
