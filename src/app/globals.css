@@ -1400,3 +1400,39 @@ table.data tr.canceled td {
 .lt-foot .muted {
   color: var(--text-muted);
 }
+
+/* ── 검색 노출용 정적 페이지 (지역 · 단지) ─────────────────────────────── */
+.crumb {
+  margin-bottom: 10px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.crumb a {
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+.crumb a:hover {
+  color: var(--series-1);
+  text-decoration: underline;
+}
+
+/* 첫 화면에서 지역 페이지로 가는 입구 — 크롤러가 걸어갈 길이다 */
+.region-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.region-links a {
+  padding: 5px 11px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  text-decoration: none;
+}
+.region-links a:hover {
+  color: var(--text-primary);
+  border-color: var(--series-1);
+  background: var(--series-1-wash);
+}
