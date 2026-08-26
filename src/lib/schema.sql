@@ -165,6 +165,9 @@ alter table kapt_ingest_log enable row level security;
 drop function if exists search_complexes(
   text[], text, numeric, numeric, int, int, int, text, int, int
 );
+drop function if exists search_complexes(
+  text[], text, numeric, numeric, int, int, int, int, int, text, int, int
+);
 
 create or replace function search_complexes(
   p_lawd_cds  text[],
@@ -174,6 +177,11 @@ create or replace function search_complexes(
   p_price_min int,
   p_price_max int,
   p_min_deals int  default 1,
+  -- 준공년도 범위. null 이면 제한 없음.
+  -- 실거래 신고의 건축년도를 쓴다 — 최근 1년 거래 단지 11,677곳 중 빠진 값이 0 이라
+  -- 조건을 걸어도 조용히 사라지는 단지가 없다. (K-apt 사용승인 연도와 98.05% 일치)
+  p_year_min  int  default null,
+  p_year_max  int  default null,
   p_sort      text default 'price_asc',
   p_limit     int  default 300,
   p_offset    int  default 0
@@ -257,6 +265,9 @@ as $$
     select * from grouped
     where price between p_price_min and p_price_max
       and deal_count >= p_min_deals
+      -- 준공년도는 **묶은 뒤** 거른다. 화면에 보이는 값과 조건이 같은 값이어야 한다.
+      and (p_year_min is null or build_year >= p_year_min)
+      and (p_year_max is null or build_year <= p_year_max)
   )
   select
     f.lawd_cd, f.apt_seq, f.apt_nm, f.umd_nm, f.build_year,

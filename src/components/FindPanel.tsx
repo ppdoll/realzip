@@ -24,7 +24,15 @@ type FindItem = {
 
 type FindResponse = {
   window: { from: string; months: number };
-  query: { pyMin: number; pyMax: number; priceMin: number; priceMax: number; minDeals: number };
+  query: {
+    pyMin: number;
+    pyMax: number;
+    priceMin: number;
+    priceMax: number;
+    minDeals: number;
+    yearMin: number | null;
+    yearMax: number | null;
+  };
   total: number;
   offset: number;
   skipped: { code: string; label: string }[];
@@ -43,6 +51,28 @@ const SORTS = [
 ];
 
 const PAGE = 100;
+
+/**
+ * 연식 구간.
+ *
+ * 사람은 "2006년 준공" 보다 "20년쯤 된 집" 으로 생각해서 나이로 고르게 하고,
+ * 서버에는 연도로 바꿔 보낸다. 기준 연도는 화면에서 계산한다.
+ *
+ * 구간은 실측 분포에서 잡았다 — 최근 1년 거래 단지 11,677곳 중
+ * 5년 이내 5.4% · 5~10년 12.0% · 10~20년 20.8% · 20~30년 36.1% · 30년 이상 25.7%.
+ * 어느 구간을 골라도 표본이 남는다.
+ *
+ * 준공년도는 **빠진 값이 없다**(11,677곳 중 0). 조건을 걸어도 조용히 사라지는
+ * 단지가 없어서, 회전율 필터처럼 "지표 미상 제외" 를 따로 적을 필요가 없다.
+ */
+const AGE_BANDS = [
+  { key: 'all', label: '전체', min: null as number | null, max: null as number | null },
+  { key: 'a5', label: '5년 이내', min: 5, max: null },
+  { key: 'a10', label: '10년 이내', min: 10, max: null },
+  { key: 'a1020', label: '10~20년', min: 20, max: 10 },
+  { key: 'a2030', label: '20~30년', min: 30, max: 20 },
+  { key: 'a30', label: '30년 이상', min: null, max: 30 },
+];
 
 /** 억 단위 입력 → 만원 */
 const eok2man = (eok: number) => Math.round(eok * 10_000);
@@ -82,6 +112,10 @@ export default function FindPanel({
   const [eokMin, setEokMin] = useState('5');
   const [eokMax, setEokMax] = useState('10');
   const [minDeals, setMinDeals] = useState('3');
+  const [ageKey, setAgeKey] = useState('all');
+  /** 직접 입력한 준공년도 — 구간 단추를 누르면 지운다 */
+  const [yrMin, setYrMin] = useState('');
+  const [yrMax, setYrMax] = useState('');
   const [sort, setSort] = useState('ppa_asc');
 
   const [data, setData] = useState<FindResponse | null>(null);
@@ -163,6 +197,17 @@ export default function FindPanel({
       setLoading(true);
       setError(null);
       try {
+        const thisYear = new Date().getFullYear();
+        const band = AGE_BANDS.find((b) => b.key === ageKey);
+        // 나이 -> 연도. "10년 이내" 는 (올해-10) 년 이후 준공이라는 뜻이다.
+        const yMin = yrMin ? Number(yrMin) : band?.min != null ? thisYear - band.min : null;
+        const yMax = yrMax ? Number(yrMax) : band?.max != null ? thisYear - band.max : null;
+        if (yMin != null && yMax != null && yMin > yMax) {
+          setError('준공년도 범위를 확인해주세요.');
+          setLoading(false);
+          return;
+        }
+
         const qs = new URLSearchParams({
           codes: codes.join(','),
           areaMin: String(aMin),
@@ -173,6 +218,8 @@ export default function FindPanel({
           sort,
           limit: String(PAGE),
           offset: String(offset),
+          ...(yMin != null ? { yearMin: String(yMin) } : {}),
+          ...(yMax != null ? { yearMax: String(yMax) } : {}),
         });
         const r = await fetch(`/api/find?${qs}`);
         const j: FindResponse = await r.json();
@@ -193,7 +240,7 @@ export default function FindPanel({
         if (id === reqId.current) setLoading(false);
       }
     },
-    [picked, pyMin, pyMax, m2Range, eokMin, eokMax, minDeals, sort],
+    [picked, pyMin, pyMax, m2Range, eokMin, eokMax, minDeals, sort, ageKey, yrMin, yrMax],
   );
 
   const toggle = (code: string) =>
@@ -354,6 +401,61 @@ export default function FindPanel({
           </div>
         </div>
 
+        {/* ── 준공년도 ── */}
+        <div className="find-row">
+          <label className="find-label">준공</label>
+          <div className="find-body">
+            <div className="chips">
+              {AGE_BANDS.map((b) => (
+                <button
+                  key={b.key}
+                  type="button"
+                  className="chip"
+                  aria-pressed={ageKey === b.key && !yrMin && !yrMax}
+                  onClick={() => {
+                    setAgeKey(b.key);
+                    setYrMin('');
+                    setYrMax('');
+                  }}
+                >
+                  {b.label}
+                </button>
+              ))}
+            </div>
+            <div className="find-range">
+              <input
+                className="control num"
+                type="number"
+                min={1950}
+                max={2100}
+                placeholder="1961"
+                value={yrMin}
+                aria-label="준공년도 하한"
+                onChange={(e) => {
+                  setYrMin(e.target.value);
+                  setAgeKey('all');
+                }}
+              />
+              <span>~</span>
+              <input
+                className="control num"
+                type="number"
+                min={1950}
+                max={2100}
+                placeholder={String(new Date().getFullYear())}
+                value={yrMax}
+                aria-label="준공년도 상한"
+                onChange={(e) => {
+                  setYrMax(e.target.value);
+                  setAgeKey('all');
+                }}
+              />
+              <span className="unit">년</span>
+              <span className="muted">비우면 제한 없음</span>
+            </div>
+          </div>
+        </div>
+
         {/* ── 그 밖 ── */}
         <div className="find-row">
           <label className="find-label">조건</label>
@@ -409,6 +511,11 @@ export default function FindPanel({
             같은 84㎡ 에서도 3룸과 4룸이 갈립니다.
           </li>
           <li>
+            <b>준공년도는 실거래 신고에 적힌 건축년도</b>입니다. 최근 1년 거래 단지
+            11,677곳 중 빠진 값이 없어서, 조건을 걸어도 조용히 빠지는 단지는 없습니다.
+            재건축으로 다시 지은 단지는 새 건물의 준공년도로 잡힙니다.
+          </li>
+          <li>
             담아둔 지역만 고를 수 있습니다. 목록에 없는 시군구는 아직 데이터를 받지 않은
             곳입니다.
           </li>
@@ -429,7 +536,10 @@ export default function FindPanel({
           <p className="card-sub">
             {data.window.from.slice(0, 4)}.{data.window.from.slice(4)} 이후 · {data.query.pyMin}~
             {data.query.pyMax}평 · {man2eok(data.query.priceMin)}~{man2eok(data.query.priceMax)}억 ·
-            최소 {data.query.minDeals}건. 같은 단지의 다른 평형은 따로 셉니다.
+            최소 {data.query.minDeals}건
+            {(data.query.yearMin != null || data.query.yearMax != null) &&
+              ` · 준공 ${data.query.yearMin ?? ''}~${data.query.yearMax ?? ''}년`}
+            . 같은 단지의 다른 평형은 따로 셉니다.
           </p>
 
           {rows.length === 0 ? (

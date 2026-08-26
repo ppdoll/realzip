@@ -22,6 +22,9 @@ const Query = z.object({
   priceMax: z.coerce.number().int().min(1).max(50_000_000),
   /** 최소 거래 건수 — 중위값의 신뢰도 */
   minDeals: z.coerce.number().int().min(1).max(50).default(1),
+  /** 준공년도 범위 — 비우면 제한 없음 */
+  yearMin: z.coerce.number().int().min(1900).max(2100).optional(),
+  yearMax: z.coerce.number().int().min(1900).max(2100).optional(),
   months: z.coerce.number().int().min(1).max(36).default(12),
   sort: z.enum(SORTS).default('price_asc'),
   limit: z.coerce.number().int().min(1).max(300).default(100),
@@ -86,6 +89,9 @@ export async function GET(req: Request) {
   if (q.priceMin >= q.priceMax) {
     return NextResponse.json({ error: '금액 범위가 뒤집혀 있습니다.' }, { status: 400 });
   }
+  if (q.yearMin != null && q.yearMax != null && q.yearMin > q.yearMax) {
+    return NextResponse.json({ error: '준공년도 범위가 뒤집혀 있습니다.' }, { status: 400 });
+  }
   if (storeMode() !== 'supabase') {
     return NextResponse.json(
       { error: '조건 검색은 Supabase 가 필요합니다 — 여러 지역을 한 번에 훑기 때문입니다.' },
@@ -122,6 +128,8 @@ export async function GET(req: Request) {
       p_price_min: q.priceMin,
       p_price_max: q.priceMax,
       p_min_deals: q.minDeals,
+      p_year_min: q.yearMin ?? null,
+      p_year_max: q.yearMax ?? null,
       p_sort: q.sort,
       p_limit: q.limit,
       p_offset: q.offset,
@@ -157,6 +165,8 @@ export async function GET(req: Request) {
         priceMin: q.priceMin,
         priceMax: q.priceMax,
         minDeals: q.minDeals,
+        yearMin: q.yearMin ?? null,
+        yearMax: q.yearMax ?? null,
         sort: q.sort,
       },
       total,
