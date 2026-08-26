@@ -47,20 +47,29 @@ export const metadata: Metadata = {
    */
   alternates: { canonical: '/' },
   /**
-   * 검색엔진 소유 확인. 값은 환경변수로 넣는다 — 코드에 박으면 저장소에 남고,
-   * 배포 주소가 바뀔 때 같이 갈아야 한다.
-   *   GOOGLE_SITE_VERIFICATION  Search Console 의 HTML 태그 content 값
-   *   NAVER_SITE_VERIFICATION   네이버 서치어드바이저의 같은 값
-   * 없으면 태그를 넣지 않는다 (빈 태그는 확인 실패로 잡힌다).
+   * 검색엔진 소유 확인.
+   *
+   * 이 값들은 **비밀이 아니다.** 페이지 소스에 그대로 드러나도록 만들어진 토큰이고,
+   * 값을 안다고 남이 소유권을 주장할 수는 없다 — 사이트에 실제로 심어야 하기 때문이다.
+   * 그래서 코드에 두고, 환경변수가 있으면 그쪽을 우선한다(계정을 옮길 때 재배포 없이
+   * 갈아끼울 수 있게).
+   *
+   * `realzip.vercel.app` 은 Vercel 소유 도메인의 하위 주소라 DNS 를 건드릴 수 없다.
+   * 그래서 Search Console 에서 "도메인" 속성은 쓸 수 없고 **"URL 접두어" 속성 +
+   * HTML 태그** 방식만 가능하다. 나중에 직접 도메인을 붙이면 도메인 속성이 낫다.
+   *
+   * 값이 없으면 태그를 넣지 않는다 (빈 태그는 확인 실패로 잡힌다).
    */
-  verification: {
-    ...(process.env.GOOGLE_SITE_VERIFICATION
-      ? { google: process.env.GOOGLE_SITE_VERIFICATION }
-      : {}),
-    ...(process.env.NAVER_SITE_VERIFICATION
-      ? { other: { 'naver-site-verification': process.env.NAVER_SITE_VERIFICATION } }
-      : {}),
-  },
+  verification: (() => {
+    const google =
+      process.env.GOOGLE_SITE_VERIFICATION ??
+      '0PpPo4bINVY-5kETwF3FShArtLEOBEKzb2Remaj32QM';
+    const naver = process.env.NAVER_SITE_VERIFICATION;
+    return {
+      ...(google ? { google } : {}),
+      ...(naver ? { other: { 'naver-site-verification': naver } } : {}),
+    };
+  })(),
   /**
    * iOS 는 매니페스트를 보지 않는다 — 홈 화면에 담을 때 쓰는 값을 따로 준다.
    * `statusBarStyle: 'default'` 로 두는 이유: 이 앱은 라이트·다크를 모두 쓰는데
