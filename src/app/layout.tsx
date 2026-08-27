@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import type { Metadata, Viewport } from 'next';
 import ServiceWorker from '@/components/ServiceWorker';
 import { siteUrl } from '@/lib/site-url';
@@ -142,6 +143,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="ko">
       <body>
         {children}
+        {/*
+          모든 페이지에 있는 푸터. 매일 리포트로 가는 길을 여기 두는 이유는
+          크롤러가 링크를 따라 걷기 때문이다 — 사이트맵에만 있으면 발견이 느리다.
+        */}
+        <footer className="sitefoot">
+          <Link href="/">아파트 실거래가 조회</Link>
+          <Link href="/report">매일 부동산 리포트</Link>
+          <span className="muted">국토교통부 실거래 신고 자료 · 참고용</span>
+        </footer>
         <ServiceWorker />
         <script
           type="application/ld+json"

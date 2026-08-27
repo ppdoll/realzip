@@ -1,0 +1,77 @@
+name: 매일 부동산 리포트
+
+# 왜 GitHub Actions 인가 — 리포트는 판단이 필요 없는 작업이라 사람도 모델도
+# 끼어들 이유가 없다. 여기서 돌리면 PC 가 꺼져 있어도 매일 돌고 토큰을 쓰지 않는다.
+#
+# 시각: 21:00 UTC = 06:00 KST.
+# Vercel 크론(`vercel.json`)이 20:00 UTC 에 실거래를 다시 받아오므로 **그 뒤**여야
+# 한다. 한 시간 여유를 둔다.
+#
+# 필요한 저장소 Secret (Settings → Secrets and variables → Actions):
+#   SUPABASE_URL                우리 프로젝트 URL
+#   SUPABASE_SERVICE_ROLE_KEY   서버 전용 키. 절대 NEXT_PUBLIC_ 로 노출하지 않는다
+#   ECOS_API_KEY                한국은행 ECOS 인증키. 없으면 금리 블록만 빠지고 나머지는 나온다
+
+on:
+  schedule:
+    - cron: '0 21 * * *'
+  workflow_dispatch:
+
+# 앞 실행이 아직 돌고 있으면 겹치지 않게 기다린다 — 같은 파일을 두 번 쓰지 않도록
+concurrency:
+  group: daily-report
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - run: npm ci
+
+      # Secret 을 아직 안 넣었으면 조용히 끝낸다 — 매일 실패 메일이 오는 것보다 낫다
+      - name: Secret 확인
+        id: guard
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        run: |
+          if [ -z "$SUPABASE_URL" ]; then
+            echo "SUPABASE_URL Secret 이 없다 — 저장소 Settings → Secrets 에 넣어야 리포트가 돈다"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 리포트 생성
+        if: steps.guard.outputs.ready == 'true'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ECOS_API_KEY: ${{ secrets.ECOS_API_KEY }}
+        run: npm run report:build
+
+      - name: 바뀐 게 있으면 커밋
+        if: steps.guard.outputs.ready == 'true'
+        run: |
+          # 리포트 파일 말고는 건드리지 않는다 — 이 작업이 소스를 바꿀 일은 없다
+          git add content/reports
+          if git diff --cached --quiet; then
+            echo "바뀐 리포트가 없다 — 커밋하지 않는다"
+            exit 0
+          fi
+          git config user.name  "realzip-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          DATE=$(date -u -d '+9 hours' +%Y-%m-%d)
+          git commit -m "리포트 ${DATE}"
+          # 그 사이 누가 밀었을 수 있다. 리포트는 파일 추가라 rebase 로 안전하게 얹힌다
+          git pull --rebase origin main
+          git push origin HEAD:main

@@ -1,6 +1,7 @@
 import type { MetadataRoute } from 'next';
 import { tradedComplexes } from '@/lib/complex-page';
 import { ingestedRegions } from '@/lib/region-page';
+import { reportDates } from '@/lib/report';
 import { siteUrl } from '@/lib/site-url';
 
 /**
@@ -27,7 +28,20 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
   const home: MetadataRoute.Sitemap = [
     { url: `${siteUrl}/`, lastModified: now, changeFrequency: 'daily', priority: 1 },
+    { url: `${siteUrl}/report`, lastModified: now, changeFrequency: 'daily', priority: 0.9 },
   ];
+
+  /**
+   * 리포트는 파일이라 DB 와 무관하다 — try 밖에서 담는다. DB 가 죽어도
+   * 리포트 주소는 사이트맵에 남아야 한다.
+   */
+  const reports: MetadataRoute.Sitemap = reportDates().map((date) => ({
+    url: `${siteUrl}/report/${date}`,
+    lastModified: new Date(`${date}T00:00:00Z`),
+    // 지난 리포트는 다시 바뀌지 않는다
+    changeFrequency: 'never' as const,
+    priority: 0.5,
+  }));
 
   try {
     const [regions, complexes] = await Promise.all([
@@ -36,6 +50,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ]);
     return [
       ...home,
+      ...reports,
       ...regions.map((code) => ({
         url: `${siteUrl}/region/${code}`,
         lastModified: now,
@@ -50,6 +65,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       })),
     ];
   } catch {
-    return home;
+    return [...home, ...reports];
   }
 }

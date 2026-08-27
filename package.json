@@ -24,7 +24,8 @@
     "metrics:probe": "tsx scripts/metrics-probe.ts",
     "metrics:apt": "tsx scripts/metrics-apt.ts",
     "metrics:audit": "tsx scripts/metrics-audit.ts",
-    "ingest:index": "tsx scripts/ingest-index.ts"
+    "ingest:index": "tsx scripts/ingest-index.ts",
+    "report:build": "tsx scripts/build-report.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
